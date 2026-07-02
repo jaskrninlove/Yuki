@@ -1,0 +1,390 @@
+"""
+Yuki Bot - Chat Handler
+- Pure AI replies — no keyword/custom reply system
+- English only
+- Admin-only in groups
+- Age guard — ignores backlog on reconnect/promote
+- No sticker spam, no emoji spam
+"""
+
+import asyncio
+import logging
+import random
+from collections import defaultdict
+from datetime import datetime, timezone
+import time as _time
+
+from telegram import Update, Bot
+from telegram.ext import MessageHandler, filters, ContextTypes
+from telegram.constants import ChatAction
+
+from yuki.core import database as db
+from yuki.utils.brain import get_reply, _smart_fallback
+from yuki.utils.helpers import ensure_user
+
+log = logging.getLogger("yuki.handlers.chat")
+
+# ─────────────────────────────────────────────
+# State
+# ─────────────────────────────────────────────
+
+_history: dict[int, list[dict]] = defaultdict(list)
+_MAX_HISTORY = 14
+
+_last_reply: dict[int, datetime]  = {}
+_user_last: dict[int, datetime]   = {}
+_last_sticker: dict[int, datetime] = {}
+_replied_streak: dict[int, int]   = defaultdict(int)
+
+# Cooldowns (seconds)
+_CHAT_COOLDOWN    = 5
+_USER_COOLDOWN    = 8
+_STICKER_COOLDOWN = 180
+_STREAK_SKIP      = 6   # skip reply after N consecutive replies (feels natural)
+
+# Bot startup time — messages before this are ignored (backlog guard)
+_BOT_START_TIME: datetime | None = None
+
+_bot_id: int | None       = None
+_bot_username: str | None = None
+
+# Admin cache
+_admin_cache: dict[int, bool]  = {}
+_admin_cache_ts: dict[int, float] = {}
+_ADMIN_CACHE_TTL = 300
+
+
+def init_bot_info(bot_id: int, username: str):
+    global _bot_id, _bot_username, _BOT_START_TIME
+    _bot_id         = bot_id
+    _bot_username   = username.lower()
+    _BOT_START_TIME = datetime.now(timezone.utc)
+    log.info("Chat handler ready — @%s (%s) start=%s", username, bot_id, _BOT_START_TIME)
+
+
+# ─────────────────────────────────────────────
+# Admin Check (cached)
+# ─────────────────────────────────────────────
+
+async def _is_admin(bot: Bot, chat_id: int) -> bool:
+    now = _time.monotonic()
+    if chat_id in _admin_cache:
+        if now - _admin_cache_ts.get(chat_id, 0) < _ADMIN_CACHE_TTL:
+            return _admin_cache[chat_id]
+    try:
+        member = await bot.get_chat_member(chat_id, bot.id)
+        result = member.status in ("administrator", "creator")
+    except Exception:
+        result = False
+    _admin_cache[chat_id]    = result
+    _admin_cache_ts[chat_id] = now
+    return result
+
+
+def invalidate_admin_cache(chat_id: int):
+    _admin_cache.pop(chat_id, None)
+    _admin_cache_ts.pop(chat_id, None)
+
+
+# ─────────────────────────────────────────────
+# Age Guard — kills backlog spam
+# ─────────────────────────────────────────────
+
+def _is_old(msg) -> bool:
+    """True if message was sent before bot started — skip it."""
+    if _BOT_START_TIME is None or msg.date is None:
+        return False
+    msg_date = msg.date
+    if msg_date.tzinfo is None:
+        msg_date = msg_date.replace(tzinfo=timezone.utc)
+    return msg_date < _BOT_START_TIME
+
+
+# ─────────────────────────────────────────────
+# Cooldown Helpers
+# ─────────────────────────────────────────────
+
+def _push_history(chat_id: int, role: str, content: str):
+    hist = _history[chat_id]
+    hist.append({"role": role, "content": content})
+    if len(hist) > _MAX_HISTORY:
+        hist.pop(0)
+
+
+def _can_reply(chat_id: int, user_id: int) -> bool:
+    now = datetime.utcnow()
+    if (now - _last_reply.get(chat_id, datetime.min)).total_seconds() < _CHAT_COOLDOWN:
+        return False
+    if (now - _user_last.get(user_id, datetime.min)).total_seconds() < _USER_COOLDOWN:
+        return False
+    # Natural skip after too many consecutive replies
+    if _replied_streak[chat_id] >= _STREAK_SKIP:
+        _replied_streak[chat_id] = 0
+        return False
+    return True
+
+
+def _mark_replied(chat_id: int, user_id: int):
+    now = datetime.utcnow()
+    _last_reply[chat_id]  = now
+    _user_last[user_id]   = now
+    _replied_streak[chat_id] += 1
+
+
+def _can_sticker_reply(chat_id: int) -> bool:
+    now = datetime.utcnow()
+    return (now - _last_sticker.get(chat_id, datetime.min)).total_seconds() > _STICKER_COOLDOWN
+
+
+def _mark_sticker(chat_id: int):
+    _last_sticker[chat_id] = datetime.utcnow()
+
+
+# ─────────────────────────────────────────────
+# Activity Tracking
+# ─────────────────────────────────────────────
+
+async def _track_activity(user, chat, kind: str = "text", text: str | None = None):
+    try:
+        await ensure_user(user)
+        await db.increment_user_messages(user.id, chat.id)
+        if text:
+            await db.log_message(chat.id, user.id, text)
+
+        inc = {"xp": 5, "rank_score": 5, "daily_messages": 1, "weekly_messages": 1, "monthly_messages": 1}
+        if kind == "text":    inc["text_messages"] = 1
+        elif kind == "sticker": inc["stickers_sent"] = 1; inc["xp"] = 2; inc["rank_score"] = 2
+        elif kind == "photo": inc["photos_sent"] = 1;    inc["xp"] = 3; inc["rank_score"] = 3
+        elif kind == "video": inc["videos_sent"] = 1;    inc["xp"] = 4; inc["rank_score"] = 4
+        elif kind == "voice": inc["voice_notes"] = 1;    inc["xp"] = 4; inc["rank_score"] = 4
+
+        await db.get_db().users.update_one(
+            {"user_id": user.id},
+            {
+                "$inc": inc,
+                "$set": {
+                    "user_id":    user.id,
+                    "first_name": user.first_name or user.full_name,
+                    "username":   user.username,
+                    "last_seen":  datetime.utcnow(),
+                },
+                "$addToSet": {"active_chats": chat.id},
+            },
+            upsert=True,
+        )
+    except Exception as e:
+        log.debug("Activity tracking failed: %s", e)
+
+
+async def _send_typing(chat_id: int, ctx):
+    try:
+        await ctx.bot.send_chat_action(chat_id, ChatAction.TYPING)
+    except Exception:
+        pass
+
+
+# ─────────────────────────────────────────────
+# Main Text Handler — pure AI, no keyword system
+# ─────────────────────────────────────────────
+
+async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    msg  = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+
+    if not msg or not user or not chat or user.is_bot:
+        return
+
+    # Age guard — skip backlog
+    if _is_old(msg):
+        return
+
+    # Admin guard — groups only
+    if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
+        return
+
+    text = (msg.text or msg.caption or "").strip()
+    if not text:
+        return
+
+    loop = asyncio.get_event_loop()
+
+    # Always track activity (no admin needed for tracking in group context already guarded above)
+    loop.create_task(_track_activity(user, chat, "text", text))
+
+    # Save reply context
+    if msg.reply_to_message and msg.reply_to_message.text:
+        loop.create_task(
+            db.save_chat_memory(
+                chat.id,
+                msg.reply_to_message.text[:60],
+                reply_text=text[:200],
+            )
+        )
+
+    _push_history(chat.id, "user", f"{user.first_name}: {text}")
+
+    # ── Decide whether Yuki should reply ──
+    should_reply = False
+    always_reply = False  # bypass cooldown
+
+    if chat.type == "private":
+        should_reply = True
+        always_reply = True
+
+    elif _bot_username and f"@{_bot_username}" in text.lower():
+        # Direct mention → always reply
+        should_reply = True
+        always_reply = True
+
+    elif (
+        msg.reply_to_message
+        and msg.reply_to_message.from_user
+        and msg.reply_to_message.from_user.id == _bot_id
+    ):
+        # Reply to Yuki → always reply
+        should_reply = True
+        always_reply = True
+
+    if not should_reply:
+        return
+
+    if not always_reply and not _can_reply(chat.id, user.id):
+        return
+
+    _mark_replied(chat.id, user.id)
+    loop.create_task(_send_typing(chat.id, ctx))
+
+    try:
+        reply_text = await asyncio.wait_for(
+            get_reply(
+                text,
+                history=_history[chat.id][:-1],
+                user_name=user.first_name or "friend",
+            ),
+            timeout=7.0,
+        )
+    except Exception:
+        reply_text = _smart_fallback(text)
+
+    if not reply_text:
+        return
+
+    try:
+        await msg.reply_text(reply_text, parse_mode="HTML")
+        _push_history(chat.id, "assistant", reply_text)
+    except Exception:
+        try:
+            # Fallback without parse_mode if HTML fails
+            await msg.reply_text(reply_text)
+            _push_history(chat.id, "assistant", reply_text)
+        except Exception as e:
+            log.warning("Reply failed: %s", e)
+
+
+# ─────────────────────────────────────────────
+# Media Handlers
+# ─────────────────────────────────────────────
+
+async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    msg  = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+
+    if not msg or not user or not chat or user.is_bot:
+        return
+    if _is_old(msg):
+        return
+    if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
+        return
+
+    asyncio.get_event_loop().create_task(_track_activity(user, chat, "photo"))
+
+
+async def handle_video(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    msg  = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+
+    if not msg or not user or not chat or user.is_bot:
+        return
+    if _is_old(msg):
+        return
+    if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
+        return
+
+    asyncio.get_event_loop().create_task(_track_activity(user, chat, "video"))
+
+
+async def handle_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    msg  = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+
+    if not msg or not user or not chat or user.is_bot:
+        return
+    if _is_old(msg):
+        return
+    if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
+        return
+
+    asyncio.get_event_loop().create_task(_track_activity(user, chat, "voice"))
+
+
+async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """
+    Sticker handler.
+    - Age guard: ignores all stickers sent before bot started (kills reconnect spam)
+    - Admin guard: only works when Yuki is admin
+    - Heavy cooldown: max 1 reply per 3 minutes per chat
+    - Only replies to stickers in DM or when mentioned/replied-to
+    """
+    msg  = update.effective_message
+    user = update.effective_user
+    chat = update.effective_chat
+
+    if not msg or not user or not chat or user.is_bot:
+        return
+
+    # ── AGE GUARD: this kills the reconnect/promote spam ──
+    if _is_old(msg):
+        return
+
+    # ── ADMIN GUARD ──
+    if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
+        return
+
+    asyncio.get_event_loop().create_task(_track_activity(user, chat, "sticker"))
+
+    # Only reply to stickers in DMs, or if cooldown allows in groups
+    in_dm = chat.type == "private"
+
+    if not in_dm and not _can_sticker_reply(chat.id):
+        return
+
+    if not in_dm and not _can_reply(chat.id, user.id):
+        return
+
+    _mark_replied(chat.id, user.id)
+    _mark_sticker(chat.id)
+
+    emoji = getattr(msg.sticker, "emoji", "") or ""
+
+    try:
+        from yuki.utils.brain import get_sticker_reply_text
+        reply_text = await get_sticker_reply_text(emoji)
+        if reply_text:
+            await msg.reply_text(reply_text, parse_mode="HTML")
+    except Exception as e:
+        log.debug("Sticker reply failed: %s", e)
+
+
+# ─────────────────────────────────────────────
+# Handlers
+# ─────────────────────────────────────────────
+
+text_handler    = MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text)
+photo_handler   = MessageHandler(filters.PHOTO, handle_photo)
+video_handler   = MessageHandler(filters.VIDEO | filters.ANIMATION, handle_video)
+voice_handler   = MessageHandler(filters.VOICE | filters.AUDIO, handle_voice)
+sticker_handler = MessageHandler(filters.Sticker.ALL, handle_sticker)

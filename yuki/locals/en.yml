@@ -1,0 +1,371 @@
+bot:
+  name: "Yuki"
+  tagline: "Your AI Girlfriend & GC Bestie :toast:"
+
+start:
+  caption: |
+    :heart: <b>Hey {name}~</b>
+
+    I'm <b>Yuki</b> — your sweet, silly, romantic bestie! I'm here to keep every chat alive, share stickers, send gifts & be your forever mood :spider:
+
+    ❝<i>Every message you send, I'll always reply back~</i>❞
+
+    <blockquote>I save our memories, learn your vibe & grow with you! Just talk to me — I'm always here :kiss:</blockquote>
+
+  buttons:
+    help: "Help & Commands"
+    owner: "Owner"
+    support: "Support"
+    updates: "Updates"
+    add_group: "Add Me in Your Chat"
+    stats: "Stats"
+    ping: "Ping"
+
+owner_panel:
+  caption: |
+    :crown: <b>Yuki — Owner Panel</b>
+
+    <blockquote>
+    :pinkheart: <b>Developer:</b> <a href="https://t.me/imceobiitxh">𝘿𝙐𝙂𝙂𝙐ᝰ.</a>
+    :bot: <b>Project:</b> Yuki Bot
+    :settings: <b>Version:</b> 1.0.0
+    :sparkle: <b>Status:</b> Stable
+
+    </blockquote>
+
+    <i>Thank you for supporting Yuki! Every update is made with love to create the sweetest AI companion for everyone. :heart:</i>
+
+help:
+  page_1: |
+    :book: <b>Help Center :dot2: 1/11</b>
+
+    :flower: <b>Getting Started</b>
+    <blockquote>
+    :dot2: /start — Wake Yuki up
+    :dot2: /help — Open this help center
+    :dot2: /ping — Check my response speed
+    :dot2: /health — View bot status
+    :dot2: /me — View your profile
+    :dot2: /stats — Global statistics
+
+    </blockquote>
+
+    <i>Use the buttons below to explore more features.</i>
+
+  page_2: |
+    :book: <b>Help Center :dot2: 2/11</b>
+
+    :gift: <b>Fun Features</b>
+    <blockquote>
+    :dot2: /gift @user — Send a lovely gift
+    :dot2: /mygift — View received gifts
+    :dot2: /qt — Create quote stickers
+    :dot2: /quote — Alternative quote command
+    :dot2: /yukitag — Mention everyone
+    :dot2: /yukistop — Stop active tagging
+
+    </blockquote>
+
+    <i>Make every conversation more fun together. :sparkle:</i>
+
+  page_3: |
+    :book: <b>Help Center :dot2: 3/11</b>
+
+    :users: <b>Group Management</b>
+    <blockquote>
+    :dot2: /active — Most active members
+    :dot2: /top — Group leaderboard
+    :dot2: /rank — Your rank card
+    :dot2: /maintenance — Toggle maintenance
+    :dot2: /broadcast — Broadcast messages
+    :dot2: /ban :dot2: /mute :dot2: /unmute
+
+    </blockquote>
+
+    <i>Powerful tools designed for group admins.</i>
+
+  page_4: |
+    :book: <b>Help Center :dot2: 4/11</b>
+
+    :settings: <b>Utilities</b>
+    <blockquote>
+    :dot2: /setlang — Change Yuki's language
+    :dot2: /setprefix — Customize the command prefix
+    :dot2: /logs — View recent bot activity logs
+    :dot2: /groupstats — Display detailed group statistics
+    :dot2: /resetdata — Reset Yuki's stored data
+
+    </blockquote>
+
+    <i>Need more help? Join our support community anytime. :heart:</i>
+
+  page_5: |
+    :book: <b>Help Center :dot2: 5/11</b>
+
+    :tools: <b>New Utilities</b>
+    <blockquote>
+    :dot2: /id — Show user and chat IDs
+    :dot2: /avatar — Get user profile photo
+    :dot2: /calc — Calculate math expression
+    :dot2: /password — Generate secure password
+    :dot2: /uuid — Generate random UUID
+    :dot2: /base64 — Encode or decode text
+    :dot2: /json — Pretty print JSON
+    :dot2: /qr — Create QR code
+    :dot2: /wish — Check wish possibility
+    :dot2: /style — Generate stylish name fonts
+
+    </blockquote>
+
+    <i>Useful tools for daily group and personal use.</i>
+
+  page_6: |
+    :book: <b>Help Center :dot2: 6/11</b>
+
+    :mail: <b>File & Search Tools</b>
+    <blockquote>
+    :dot2: /stickerid — Get sticker file ID
+    :dot2: /getfile — Get media file ID
+    :dot2: /url — Get Telegram file URL
+    :dot2: /google — Create Google search link
+    :dot2: /wiki — Search Wikipedia summary
+    :dot2: /time — Show time by timezone/city
+    :dot2: /weather — Show city weather
+
+    </blockquote>
+
+    <i>Quick tools for files, links and information.</i>
+
+  page_7: |
+    :book: <b>Help Center :dot2: 7/11</b>
+
+    :shield: <b>Group Customization</b>
+    <blockquote>
+    :dot2: /setwelcome — Set welcome text/photo
+    :dot2: /welcome on/off — Toggle welcome
+    :dot2: /setgoodbye — Set goodbye text/photo
+    :dot2: /goodbye on/off — Toggle goodbye
+    :dot2: /setrules — Save group rules
+    :dot2: /rules — Show saved rules
+
+    </blockquote>
+
+    <i>Supports HTML formatting and inline buttons.</i>
+
+  page_8: |
+    :book: <b>Help Center :dot2: 8/11</b>
+
+    :chat: <b>Notes, Filters & AFK</b>
+    <blockquote>
+    :dot2: /savenote — Save reusable note
+    :dot2: /getnote — Show saved note
+    :dot2: /notes — List saved notes
+    :dot2: /delnote — Delete saved note
+    :dot2: /filter — Save auto-reply filter
+    :dot2: /filters — List filters
+    :dot2: /remove — Remove one filter
+    :dot2: /afk — Set AFK status
+    :dot2: /back — Remove AFK status
+
+    </blockquote>
+
+    <i>Automate replies and manage group memory easily.</i>
+
+  page_9: |
+    :book: <b>Help Center :dot2: 9/11</b>
+
+    :trophy: <b>Ranking System</b>
+    <blockquote>
+    :dot2: /top — Top 10 leaderboard
+    :dot2: /rank — Your personal rank card
+    :dot2: /globaltop — Global leaderboard
+
+    </blockquote>
+
+    <b>Ranking Features:</b>
+    <blockquote>
+    :dot2: Today / Week / Overall tabs
+    :dot2: Progress bars for activity
+    :dot2: Medal ranks :gold: :silver: :bronze:
+    :dot2: Group milestone celebrations
+    :dot2: Rank-up alerts when users climb Top 10
+
+    </blockquote>
+
+    <i>Chat more to climb higher in the group rankings.</i>
+
+  page_10: |
+    :book: <b>Help Center :dot2: 10/11</b>
+
+    :mask: <b>Vibes & Personality</b>
+    <blockquote>
+    :dot2: /shayari — Hindi/Urdu shayari
+    :dot2: /horoscope [sign] — Daily horoscope
+    :dot2: /loveletter — Reply to write a love letter
+    :dot2: /roast — Playful funny roast
+    :dot2: /ship — Love compatibility test
+    :dot2: /compliment — Sweet compliment
+    :dot2: /dare — Random fun challenge
+    :dot2: /fact — Mind-blowing fun fact
+    :dot2: /dailymsg — Toggle auto GM/GN messages
+
+    </blockquote>
+
+    <i>Make the group feel alive, funny and romantic.</i>
+
+  page_11: |
+    :book: <b>Help Center :dot2: 11/11</b>
+
+    :cake: <b>Birthday System</b>
+    <blockquote>
+    :dot2: /bday DD/MM — Save your birthday
+    :dot2: /mybirthday — Check your saved birthday
+    :dot2: /upcomingbdays — See next 10 birthdays
+
+    </blockquote>
+
+    <b>Auto Birthday Features:</b>
+    <blockquote>
+    :dot2: Yuki remembers saved birthdays
+    :dot2: Shows days remaining
+    :dot2: Sends birthday wishes automatically
+    :dot2: Works beautifully inside groups
+
+    </blockquote>
+
+    <i>Let Yuki make everyone feel special on their day.</i>
+
+ping:
+  response: |
+    :ping: <b>Pong!</b>
+
+    :zap: <b>Latency:</b> {latency} ms
+    :whiteheart: <b>Status:</b> Online
+    :rocket: <b>Everything is running smoothly.</b>
+
+health:
+  response: |
+    :greenheart: <b>System Health</b>
+
+    <blockquote>
+    :bot: Bot Status : Online
+    :database: Database : {db_status}
+    :signal: API : Connected
+    :brain: Memory : {memory} MB
+    :clock: Uptime : {uptime}
+
+    </blockquote>
+
+    <i>All systems are operating normally.</i>
+
+stats:
+  response: |
+    :chart: <b>Yuki Statistics</b>
+
+    <blockquote>
+    :user: Users : {users}
+    :chat: Groups : {groups}
+    :mail: Messages Today : {messages}
+    :gift: Gifts Sent : {gifts}
+    :cute: Stickers Saved : {stickers}
+
+    </blockquote>
+
+    <i>Thank you for making Yuki a part of your chats. :heart:</i>
+
+active:
+  response: |
+    :star: <b>Most Active Members</b>
+
+    <blockquote>
+    {user_list}
+    </blockquote>
+
+    :users: <b>Total Active Members:</b> {count}
+
+gifts:
+  sent: |
+    :gift: <b>Gift Delivered!</b>
+
+    {sender} sent <b>{gift}</b> {emoji} to {receiver}.
+
+    <i>{desc}</i>
+
+  received: |
+    :pinkgift: <b>You Received a Gift!</b>
+
+    {sender} surprised you with a <b>{gift}</b> {emoji}
+
+    <i>{desc}</i>
+
+  my_gifts: |
+    :ribbon: <b>Your Gift Collection</b>
+
+    {gift_list}
+
+    :heart: <b>Total Gifts:</b> {count}
+
+me:
+  profile: |
+    :flower: <b>Your Profile</b>
+
+    <blockquote>
+    :user: Name : {name}
+    :id: ID : {user_id}
+    :chat: Messages : {messages}
+    :calendar: Joined : {joined}
+    :trophy: Rank : #{rank}
+    :gift: Gifts : {gifts}
+    </blockquote>
+
+    {gift_display}
+
+broadcast:
+  success: |
+    :success: Broadcast completed successfully.
+
+    :mail: Delivered to <b>{count}</b> users.
+
+  fail: |
+    :warning: Failed to deliver to <b>{failed}</b> users.
+
+maintenance:
+  on: |
+    :settings: <b>Maintenance Mode ON</b>
+
+    Yuki is currently receiving improvements. Please wait a little~ :heart:
+
+  off: |
+    :success: <b>Maintenance Mode OFF</b>
+
+    Yuki is back online and ready to chat again :flower:
+
+errors:
+  maintenance: ":settings: Yuki is currently under maintenance. Please try again in a little while. :heart:"
+  owner_only: ":crown: Only my developer can use this command."
+  admin_only: ":shield: This command is available only for group administrators."
+  not_found: ":search: I couldn't find that user."
+  no_reply: ":reply: Please reply to a user's message first."
+  group_only: ":users: This command can only be used inside groups."
+
+chat:
+  greetings:
+    - "Welcome back! I was waiting for you. :flower:"
+    - "Aww~ You're here! My day just got better. :heart:"
+    - "Hi there! Ready for another lovely conversation? :sparkle:"
+    - "It's always nice seeing you again. :pinkheart:"
+    - "Yay! Let's make today a wonderful one together. :flower2:"
+
+  reactions:
+    - "That made me smile. :heart:"
+    - "You're absolutely adorable. :flower:"
+    - "Hehe~ I really like that! :sparkle:"
+    - "Aww, that's so sweet of you. :cute:"
+    - "You're making my day brighter. :pinkheart:"
+
+  bored:
+    - "It's a little quiet... let's talk! :flower:"
+    - "I'm still here whenever you need me. :heart:"
+    - "Don't leave me waiting too long~ :sad:"
+    - "Come say hi! I have plenty of stories to tell. :sparkle:"
+    - "Every conversation with you is my favorite. :pinkheart:"

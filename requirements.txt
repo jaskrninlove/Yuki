@@ -1,0 +1,26 @@
+# Yuki Bot Dependencies
+# Python 3.11+
+
+# Telegram
+python-telegram-bot[job-queue]==21.6
+telethon==1.36.0
+
+# Database
+motor==3.5.1
+pymongo==4.8.0
+
+# AI
+openai==1.51.0
+
+# Config & Utils
+python-dotenv==1.0.1
+PyYAML==6.0.2
+httpx==0.27.2
+psutil==6.0.0
+
+# Async
+aiofiles==24.1.0
+pytz==2024.1
+qrcode
+aiogram
+pyyaml
