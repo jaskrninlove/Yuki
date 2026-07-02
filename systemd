@@ -1,0 +1,13 @@
+[Unit]
+Description=Yuki Telegram Bot
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/ubuntu/Yuki
+ExecStart=/home/ubuntu/Yuki/.venv/bin/python -m yuki
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
