@@ -1,0 +1,12 @@
+version: "3.9"
+
+services:
+  yuki:
+    build: .
+    container_name: yuki_bot
+    restart: always
+
+    env_file:
+      - .env
+
+    command: python -m yuki
