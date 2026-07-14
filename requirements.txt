@@ -21,8 +21,10 @@ psutil==6.0.0
 # Async
 aiofiles==24.1.0
 pytz==2024.1
+
+# Images
+Pillow>=10.4.0
+
+# Others
 qrcode
 aiogram
-pyyaml
-grep -i pillow requirements.txt || echo "Pillow" >> requirements.txt
-pip install Pillow --break-system-packages
