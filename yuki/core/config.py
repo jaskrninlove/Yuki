@@ -75,6 +75,12 @@ PORT: int = int(os.environ.get("PORT", "8443"))
 # ── Quote Sticker Service ─────────────────────────────────────────────────────
 QUOTLY_API: str = "https://bot.lyo.su/quote/generate"
 
+from pymongo import MongoClient
+
+client = MongoClient(MONGO_URI)
+
+DB = client[MONGO_DB_NAME]
+
 # ── Validation ───────────────────────────────────────────────────────────────
 def validate():
     missing = []

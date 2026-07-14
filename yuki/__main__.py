@@ -9,7 +9,7 @@ import logging
 import platform
 from datetime import datetime
 from telegram import BotCommand
-from telegram.ext import Application
+from telegram.ext import Application, CallbackQueryHandler
 
 from yuki.core.config import (
     BOT_TOKEN,
@@ -26,7 +26,8 @@ from yuki.core.config import (
 from yuki.core.logger import setup_logging, attach_telegram_handler, send_log
 from yuki.core import database as db
 from yuki.utils.locale import load as load_locale
-
+from yuki.modules.profile.callbacks import profile_callback
+from yuki.handlers.closebtn import CLOSE_HANDLER
 from yuki.handlers.start import handler as start_h
 from yuki.handlers.help import cmd_handler as help_cmd_h, callback_handler as help_cb_h
 from yuki.handlers.ping import ping_cmd, ping_cb, health_cmd
@@ -63,7 +64,6 @@ from yuki.handlers.admin import (
     stats_cmd_h,
     stats_cb_h,
     active_cmd_h,
-    me_cmd_h,
 
     ban_cmd_h,
     unban_cmd_h,
@@ -85,7 +85,6 @@ from yuki.handlers.callbacks import (
     back_start_handler,
     noop_handler,
     cancel_handler,
-    my_gifts_cb_handler,
     leaderboard_cb_h,
     help_router_handler,
 )
@@ -137,7 +136,10 @@ from yuki.plugins.welcome import (
     welcome_callback_h,
     welcome_setup_text_h,
 )
-
+from yuki.modules.marriage.propose import PROPOSE, PROPOSE_CB
+from yuki.modules.marriage.love import LOVE
+from yuki.modules.marriage.couple import COUPLE
+from yuki.modules.marriage.divorce import DIVORCE, DIVORCE_CB
 from yuki.plugins.tagall import tag_handler, yukitag_handler, yukistop_handler, shutdown_telethon
 from yuki.plugins.quote import qt_handler, quote_handler
 from yuki.plugins.revival import register_revival_job
@@ -145,14 +147,19 @@ from yuki.plugins.whisper import whisper_inline_handler, whisper_read_handler
 from yuki.plugins.afk import afk_handler, back_handler, afk_watch_h
 from yuki.plugins.premium_debug import emojiid_handler
 from yuki.handlers.group_events import group_event_handler
-
-from yuki.plugins.ranking import (
-    top_cmd_h,
-    rank_cmd_h,
-    rank_cb_h,
-    today_cmd_h,
+from yuki.modules.economy.rob import ROB
+from yuki.modules.economy.kill import KILL
+from yuki.modules.economy.shield import SHIELD
+from yuki.modules.rankings.rankings import RANKINGS
+from yuki.modules.rankings.callbacks import RANKINGS_CALLBACK
+from yuki.modules.referral.refer import REFER
+from yuki.modules.gacha.game import (
+    GACHA,
+    COLLECTION,
+    COLLECTION_PAGE_CB,
+    COLLECTION_CARD_CB,
+    COLLECTION_BACK_CB,
 )
-
 from yuki.plugins.vibes import (
     shayari_h,
     horoscope_h,
@@ -164,6 +171,20 @@ from yuki.plugins.vibes import (
     fact_h,
     dailymsg_h,
     register_daily_jobs,
+)
+
+from yuki.modules.wordgame.game import (
+    WORD_ANSWER_HANDLER,
+    WORD_STATS_CB,
+    TESTWORD_CMD,
+    register_word_game_job,
+)
+
+from yuki.modules.withdraw.withdraw import (
+    WITHDRAW,
+    WITHDRAW_TIER_CB,
+    WITHDRAW_CONTACT_CAPTURE,
+    WITHDRAW_ADMIN_CB,
 )
 
 from yuki.plugins.post import (
@@ -183,7 +204,23 @@ from yuki.plugins.post import (
     connect_forward_h,
 )
 
+# =========================
+# Profile
+# =========================
+from yuki.modules.profile.profile import PROFILE
+from yuki.modules.profile.xp_listener import XP_HANDLER
 
+# =========================
+# Economy
+# =========================
+from yuki.modules.economy.balance import BALANCE
+from yuki.modules.economy.daily import DAILY
+from yuki.modules.economy.pay import PAY
+
+# =========================
+# Social
+# =========================
+from yuki.modules.social.rep import REP
 
 from yuki.plugins.birthday import (
     bday_h,
@@ -243,14 +280,30 @@ async def post_init(app: Application):
         BotCommand("help",          "Command guide 📖"),
         BotCommand("ping",          "Check latency 🏓"),
         BotCommand("health",        "Bot health 💚"),
+        BotCommand("withdraw",    "Redeem your points 💸"),
 
         # ───────── Profile & Ranking ─────────
-        BotCommand("me",            "Your profile 🌸"),
+        BotCommand("profile",            "Your profile 🌸"),
         BotCommand("stats",         "Global statistics 📊"),
         BotCommand("active",        "Most active members 🌟"),
-        BotCommand("top",           "Top 10 members 🏆"),
-        BotCommand("rank",          "Your rank 📈"),
-        BotCommand("globaltop",     "Worldwide Top 🌍"),
+        BotCommand("rankings",        "Hall of Fame 🏆"),
+
+        BotCommand("profile",     "View a user's profile 👤"),
+
+        BotCommand("daily",       "Claim your daily reward 💰"),
+        BotCommand("bal",         "Check your balance 💵"),
+        BotCommand("wallet",      "Open your wallet 👛"),
+        BotCommand("balance",     "Check your wallet 💵"),
+        BotCommand("pay",         "Send money to someone 💸"),
+
+        BotCommand("rep",         "Give reputation ❤️"),
+
+        BotCommand("rob",         "Rob someone 🥷"),
+        BotCommand("kill",        "Eliminate someone ⚔️"),
+        BotCommand("shield",      "Buy protection 🛡️"),
+
+        BotCommand("gacha",       "Pull a companion 🎴"),
+        BotCommand("collection",  "View your collection 📖"),
 
         # ───────── Gifts ─────────
         BotCommand("gift",          "Send a gift 🎁"),
@@ -272,6 +325,12 @@ async def post_init(app: Application):
         BotCommand("fact",          "Interesting fact 🧠"),
         BotCommand("dailymsg",      "Auto GM/GN 🌅"),
 
+        BotCommand("propose",     "Propose to someone 💍"),
+        BotCommand("couple",      "Couple profile 💑"),
+        BotCommand("love",        "Daily love bonus ❤️"),
+        BotCommand("divorce",     "End your marriage 💔"),
+
+        BotCommand("refer",       "Get your referral link 🔗"),
         # ───────── Quote ─────────
         BotCommand("qt",            "Quote sticker ✨"),
         BotCommand("quote",         "Quote sticker ✨"),
@@ -394,12 +453,49 @@ def build_app() -> Application:
         ping_cb,
         health_cmd,
 
+         # =========================
+    # Yuki Profile
+    # =========================
+        PROFILE,
+
+    # =========================
+    # Economy
+    # =========================
+        BALANCE,
+        DAILY,
+        PAY,
+        ROB,
+        KILL,
+        SHIELD,
+        CLOSE_HANDLER,
+        PROPOSE,
+        PROPOSE_CB,
+        LOVE,
+        COUPLE,
+        DIVORCE,
+        DIVORCE_CB,
+        REFER,
+        WITHDRAW,
+        WITHDRAW_TIER_CB,
+        WITHDRAW_CONTACT_CAPTURE,
+        WITHDRAW_ADMIN_CB,
+        WORD_STATS_CB,
+        GACHA,
+        COLLECTION,
+        COLLECTION_PAGE_CB,
+        COLLECTION_CARD_CB,
+        COLLECTION_BACK_CB,
+        TESTWORD_CMD,
+    # =========================
+    # Social
+    # =========================
+        REP,
+
         group_event_handler,
 
         stats_cmd_h,
         stats_cb_h,
         active_cmd_h,
-        me_cmd_h,
         ban_cmd_h,
         unban_cmd_h,
         mute_cmd_h,
@@ -413,10 +509,8 @@ def build_app() -> Application:
         maintenance_cb_h,
         owner_cb_h,
 
-        top_cmd_h,
-        rank_cmd_h,
-        rank_cb_h,
-        today_cmd_h,
+        RANKINGS,
+        RANKINGS_CALLBACK,
 
         gift_cmd_handler,
         mygift_cmd_handler,
@@ -450,7 +544,6 @@ def build_app() -> Application:
         back_start_handler,
         noop_handler,
         cancel_handler,
-        my_gifts_cb_handler,
         leaderboard_cb_h,
 
         id_handler,
@@ -528,6 +621,7 @@ def build_app() -> Application:
     # ── Group 1: watchers ─────────────────────────────────────────────────────
     app.add_handler(filter_watch_h,   group=1)
     app.add_handler(afk_watch_h,      group=1)
+    app.add_handler(WORD_ANSWER_HANDLER, group=2)
     app.add_handler(auto_save_handler, group=1)  # fallback group saver
 
     # ── Group 2: chat catch-all (always last) ─────────────────────────────────
@@ -536,6 +630,14 @@ def build_app() -> Application:
     app.add_handler(video_handler,   group=2)
     app.add_handler(voice_handler,   group=2)
     app.add_handler(text_handler,    group=2)
+    app.add_handler(XP_HANDLER, group=10)
+    app.add_handler(
+        CallbackQueryHandler(
+          profile_callback,
+          pattern=r"^(wallet|ring|profile_badges|profile_stats|profile_refresh|profile_back|my_gifts|profile_gacha)$"
+          ),
+          group=0
+    )
 
     log.info("[ OK ] Message handlers registered: %d", len(group0_handlers) + 9)
     log.info("[ OK ] Dispatcher ready")
@@ -557,8 +659,9 @@ def main():
     register_revival_job(app)
     register_daily_jobs(app)
     register_birthday_job(app)
-    
+    register_word_game_job(app)
 
+    log.info("[ OK ] Word game job registered")
     log.info("[ OK ] Job scheduler initialized")
     log.info("[ OK ] Revival job registered")
     log.info("[ OK ] Daily messages job registered")

@@ -1,10 +1,10 @@
 """
-Yuki Bot - Ranking System
-/top  — Group Top 10
-/rank — My Rank
-Today's ranking card — auto-updates every 24h per group
-Daily milestone alerts: 500, 1000, 5000, 10000
-Premium emoji supported.
+Yuki Rankings
+Copyright © Jass
+
+Single entrypoint: /rankings, /halloffame
+Single callback handler: rk_*
+All views edit the same message in place (hub <-> sub-pages via Back).
 """
 
 import html
@@ -17,10 +17,10 @@ from telegram.ext import CommandHandler, CallbackQueryHandler, ContextTypes
 from yuki.core import database as db
 from yuki.core.config import RANKING_IMAGE
 from yuki.utils.helpers import full_name
-from yuki.utils.keyboards import rank_keyboard
+from yuki.utils.keyboards import rankings_keyboard, rankings_back_keyboard
 from yuki.utils import premium
 
-log = logging.getLogger("yuki.plugins.ranking")
+log = logging.getLogger("yuki.plugins.rankings")
 
 MEDALS = [":gold:", ":silver:", ":bronze:"] + [f"{i}." for i in range(4, 11)]
 
@@ -54,6 +54,41 @@ _milestone_cache: dict[str, int] = {}
 # Track pinned today-ranking message per chat {chat_id: message_id}
 _today_rank_msg: dict[int, int] = {}
 
+HUB_TEXT = """
+:trophy: <b>Yuki Hall of Fame</b>
+
+<blockquote>
+Legends aren't born overnight.
+
+Every message, every level, every coin
+brings you one step closer to becoming
+a name everyone remembers.
+</blockquote>
+
+:gold: <b>Wealth</b>
+Discover the richest members.
+
+:star: <b>Levels</b>
+See who has climbed the highest.
+
+:heart: <b>Reputation</b>
+Find the community's most respected people.
+
+:chat: <b>Activity</b>
+Meet Yuki's most active members.
+
+:chart: <b>Global Statistics</b>
+Explore Yuki's worldwide statistics.
+
+<blockquote expandable>
+Choose a category below to continue.
+</blockquote>
+"""
+
+
+# ─────────────────────────────────────────────
+# Small helpers
+# ─────────────────────────────────────────────
 
 def _today_key(chat_id: int) -> str:
     return f"{chat_id}:{datetime.utcnow().strftime('%Y-%m-%d')}"
@@ -71,8 +106,12 @@ async def _get_name(uid: int, fallback: str = "Unknown") -> str:
     return fallback
 
 
+def _group_only_guard(chat) -> bool:
+    return bool(chat) and chat.type != "private"
+
+
 # ─────────────────────────────────────────────
-# Today's Ranking — live, per group
+# Builders — each returns rendered HTML text
 # ─────────────────────────────────────────────
 
 async def build_today_top(chat_id: int) -> str:
@@ -98,95 +137,125 @@ async def build_today_top(chat_id: int) -> str:
             "<blockquote>No messages today yet.\nStart chatting!!</blockquote>"
         )
 
-    lines = [
-        f":chart: <b>Today's Top — {today_str}</b>",
-        "<blockquote>",
-    ]
-
+    lines = [f":chart: <b>Today's Top — {today_str}</b>", "<blockquote>"]
     for i, row in enumerate(results):
-        uid   = row["_id"]
-        count = int(row["count"])
+        uid, count = row["_id"], int(row["count"])
         medal = MEDALS[i] if i < len(MEDALS) else f"{i + 1}."
-        name  = html.escape(_short_name(await _get_name(uid)))
+        name = html.escape(_short_name(await _get_name(uid)))
         lines.append(f"{medal} <a href='tg://user?id={uid}'>{name}</a> — <b>{count:,}</b> msgs")
-
-    lines.append("")
-    lines.append("</blockquote>")
-    lines.append(f"<i>Updates live every 24h :clock:</i>")
-
+    lines += ["", "</blockquote>", "<i>Updates live every 24h :clock:</i>"]
     return "\n".join(lines)
 
 
-# ─────────────────────────────────────────────
-# Group Top 10 (all time)
-# ─────────────────────────────────────────────
-
-async def build_group_top(chat_id: int) -> str:
+async def build_group_top(chat_id: int, title: str = ":trophy: <b>Chat Top 10</b>") -> str:
+    """All-time message leaderboard for this chat. Reused for both
+    'Chat Top' and 'Activity' until a dedicated activity score exists."""
     members = await db.get_active_users(chat_id, limit=10)
 
     if not members:
-        return (
-            ":trophy: <b>Top 10</b>\n"
-            "<blockquote>No ranking data yet.\nStart chatting first!!</blockquote>"
-        )
+        return f"{title}\n<blockquote>No ranking data yet.\nStart chatting first!!</blockquote>"
 
-    lines = [":trophy: <b>Top 10</b>", "<blockquote>"]
-
+    lines = [title, "<blockquote>"]
     for i, member in enumerate(members):
-        uid   = member.get("user_id")
+        uid = member.get("user_id")
         count = int(member.get("total_messages", 0))
         medal = MEDALS[i] if i < len(MEDALS) else f"{i + 1}."
-        name  = html.escape(_short_name(await _get_name(uid, member.get("first_name", "Unknown"))))
+        name = html.escape(_short_name(await _get_name(uid, member.get("first_name", "Unknown"))))
         lines.append(f"{medal} <a href='tg://user?id={uid}'>{name}</a> — <b>{count:,}</b> msgs")
-
-    lines.append("")
-    lines.append("</blockquote>")
+    lines += ["", "</blockquote>"]
     return "\n".join(lines)
 
-
-# ─────────────────────────────────────────────
-# Global Top 10
-# ─────────────────────────────────────────────
 
 async def build_global_top() -> str:
     users = await db.get_db().users.find(
-        {},
-        {"user_id": 1, "first_name": 1, "full_name": 1, "total_messages": 1},
+        {}, {"user_id": 1, "first_name": 1, "full_name": 1, "total_messages": 1},
     ).sort("total_messages", -1).limit(10).to_list(10)
 
     if not users:
-        return (
-            ":signal: <b>Global Top 10</b>\n"
-            "<blockquote>No global data yet!!</blockquote>"
-        )
+        return ":signal: <b>Global Top 10</b>\n<blockquote>No global data yet!!</blockquote>"
 
     lines = [":signal: <b>Global Top 10</b>", "<blockquote>"]
-
     for i, user in enumerate(users):
-        uid   = user.get("user_id")
+        uid = user.get("user_id")
         count = int(user.get("total_messages", 0))
         medal = MEDALS[i] if i < len(MEDALS) else f"{i + 1}."
-        name  = html.escape(_short_name(user.get("first_name") or user.get("full_name") or "Unknown"))
+        name = html.escape(_short_name(user.get("first_name") or user.get("full_name") or "Unknown"))
         lines.append(f"{medal} <a href='tg://user?id={uid}'>{name}</a> — <b>{count:,}</b> msgs")
-
-    lines.append("")
-    lines.append("</blockquote>")
+    lines += ["", "</blockquote>"]
     return "\n".join(lines)
 
 
-# ─────────────────────────────────────────────
-# My Rank
-# ─────────────────────────────────────────────
+async def build_levels() -> str:
+    users = await db.get_db().users.find(
+        {"xp": {"$gt": 0}}, {"user_id": 1, "first_name": 1, "full_name": 1, "xp": 1},
+    ).sort("xp", -1).limit(10).to_list(10)
+
+    if not users:
+        return ":star: <b>Top Levels</b>\n<blockquote>No level data yet!!</blockquote>"
+
+    lines = [":star: <b>Top Levels</b>", "<blockquote>"]
+    for i, user in enumerate(users):
+        uid = user.get("user_id")
+        xp = int(user.get("xp", 0))
+        level = xp // 100
+        medal = MEDALS[i] if i < len(MEDALS) else f"{i + 1}."
+        name = html.escape(_short_name(user.get("first_name") or user.get("full_name") or "Unknown"))
+        lines.append(f"{medal} <a href='tg://user?id={uid}'>{name}</a> — Lv <b>{level}</b> ({xp:,} xp)")
+    lines += ["", "</blockquote>"]
+    return "\n".join(lines)
+
+
+async def build_richest() -> str:
+    """Reads 'coins'/'balance' if an economy plugin has set them."""
+    users = await db.get_db().users.find(
+        {"$or": [{"coins": {"$gt": 0}}, {"balance": {"$gt": 0}}]},
+        {"user_id": 1, "first_name": 1, "full_name": 1, "coins": 1, "balance": 1},
+    ).sort([("coins", -1), ("balance", -1)]).limit(10).to_list(10)
+
+    if not users:
+        return ":gold: <b>Richest Members</b>\n<blockquote>No economy data yet!!</blockquote>"
+
+    lines = [":gold: <b>Richest Members</b>", "<blockquote>"]
+    for i, user in enumerate(users):
+        uid = user.get("user_id")
+        coins = int(user.get("coins") or user.get("balance") or 0)
+        medal = MEDALS[i] if i < len(MEDALS) else f"{i + 1}."
+        name = html.escape(_short_name(user.get("first_name") or user.get("full_name") or "Unknown"))
+        lines.append(f"{medal} <a href='tg://user?id={uid}'>{name}</a> — <b>{coins:,}</b> coins")
+    lines += ["", "</blockquote>"]
+    return "\n".join(lines)
+
+
+async def build_reputation() -> str:
+    """Reads 'reputation' if a reputation plugin has set it."""
+    users = await db.get_db().users.find(
+        {"reputation": {"$gt": 0}},
+        {"user_id": 1, "first_name": 1, "full_name": 1, "reputation": 1},
+    ).sort("reputation", -1).limit(10).to_list(10)
+
+    if not users:
+        return ":heart: <b>Most Respected</b>\n<blockquote>No reputation data yet!!</blockquote>"
+
+    lines = [":heart: <b>Most Respected</b>", "<blockquote>"]
+    for i, user in enumerate(users):
+        uid = user.get("user_id")
+        rep = int(user.get("reputation", 0))
+        medal = MEDALS[i] if i < len(MEDALS) else f"{i + 1}."
+        name = html.escape(_short_name(user.get("first_name") or user.get("full_name") or "Unknown"))
+        lines.append(f"{medal} <a href='tg://user?id={uid}'>{name}</a> — <b>{rep:,}</b> rep")
+    lines += ["", "</blockquote>"]
+    return "\n".join(lines)
+
 
 async def build_my_rank(chat_id: int, user) -> str:
     members = await db.get_active_users(chat_id, limit=500)
-    rank    = next((i + 1 for i, m in enumerate(members) if m.get("user_id") == user.id), None)
+    rank = next((i + 1 for i, m in enumerate(members) if m.get("user_id") == user.id), None)
 
-    data  = await db.get_user(user.id) or {}
+    data = await db.get_user(user.id) or {}
     total = int(data.get("total_messages", 0))
-    xp    = int(data.get("xp", 0))
-    level = int(xp // 100)
-    name  = html.escape(full_name(user))
+    xp = int(data.get("xp", 0))
+    level = xp // 100
+    name = html.escape(full_name(user))
 
     return (
         f":user: <b>{name}</b>\n\n"
@@ -196,6 +265,26 @@ async def build_my_rank(chat_id: int, user) -> str:
         f":star: Level: <b>{level}</b>\n"
         f":sparkle: XP: <b>{xp:,}</b>\n\n"
         f"</blockquote>"
+    )
+
+
+async def build_stats() -> str:
+    dbh = db.get_db()
+    try:
+        total_users = await dbh.users.count_documents({})
+        total_msgs = await dbh.messages.estimated_document_count()
+        total_groups = await dbh.chats.count_documents({"type": {"$ne": "private"}}) \
+            if "chats" in await dbh.list_collection_names() else 0
+    except Exception:
+        total_users = total_msgs = total_groups = 0
+
+    return (
+        ":chart: <b>Global Statistics</b>\n\n"
+        "<blockquote>"
+        f":users: Total Users: <b>{total_users:,}</b>\n"
+        f":chat: Total Messages: <b>{total_msgs:,}</b>\n"
+        f":signal: Total Groups: <b>{total_groups:,}</b>\n"
+        "</blockquote>"
     )
 
 
@@ -226,17 +315,12 @@ async def _edit_ranking(query, text: str, markup):
 
 
 # ─────────────────────────────────────────────
-# Today's Ranking — send/update in group
+# Today's Ranking — live card, sent/updated by scheduler
 # ─────────────────────────────────────────────
 
 async def send_today_ranking(bot: Bot, chat_id: int):
-    """
-    Send today's ranking card to the group.
-    If one was already sent today, edit it in place.
-    Otherwise send a new one and store the message_id.
-    """
-    text   = await build_today_top(chat_id)
-    markup = rank_keyboard("today")
+    text = await build_today_top(chat_id)
+    markup = rankings_back_keyboard()
 
     existing_id = _today_rank_msg.get(chat_id)
 
@@ -244,42 +328,29 @@ async def send_today_ranking(bot: Bot, chat_id: int):
         try:
             if RANKING_IMAGE:
                 await bot.edit_message_caption(
-                    chat_id=chat_id,
-                    message_id=existing_id,
-                    caption=premium.render(text),
-                    parse_mode="HTML",
-                    reply_markup=markup,
+                    chat_id=chat_id, message_id=existing_id,
+                    caption=premium.render(text), parse_mode="HTML", reply_markup=markup,
                 )
             else:
                 await bot.edit_message_text(
-                    chat_id=chat_id,
-                    message_id=existing_id,
-                    text=premium.render(text),
-                    parse_mode="HTML",
-                    reply_markup=markup,
-                    disable_web_page_preview=True,
+                    chat_id=chat_id, message_id=existing_id,
+                    text=premium.render(text), parse_mode="HTML",
+                    reply_markup=markup, disable_web_page_preview=True,
                 )
             return
         except Exception:
-            # Message gone — send fresh
             _today_rank_msg.pop(chat_id, None)
 
     try:
         if RANKING_IMAGE:
             sent = await bot.send_photo(
-                chat_id=chat_id,
-                photo=RANKING_IMAGE,
-                caption=premium.render(text),
-                parse_mode="HTML",
-                reply_markup=markup,
+                chat_id=chat_id, photo=RANKING_IMAGE,
+                caption=premium.render(text), parse_mode="HTML", reply_markup=markup,
             )
         else:
             sent = await bot.send_message(
-                chat_id=chat_id,
-                text=premium.render(text),
-                parse_mode="HTML",
-                reply_markup=markup,
-                disable_web_page_preview=True,
+                chat_id=chat_id, text=premium.render(text), parse_mode="HTML",
+                reply_markup=markup, disable_web_page_preview=True,
             )
         _today_rank_msg[chat_id] = sent.message_id
     except Exception as e:
@@ -287,101 +358,59 @@ async def send_today_ranking(bot: Bot, chat_id: int):
 
 
 # ─────────────────────────────────────────────
-# Commands
+# Command — single entrypoint
 # ─────────────────────────────────────────────
 
-async def top_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    msg  = update.effective_message
-
-    if not chat or not msg:
+async def rankings_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    msg = update.effective_message
+    if not msg:
         return
-
-    if chat.type == "private":
-        await premium.reply(msg, ":users: Use /top in a group.")
-        return
-
-    text = await build_group_top(chat.id)
-    await _reply_ranking(msg, text, rank_keyboard("top"))
-
-
-async def rank_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    chat = update.effective_chat
-    user = update.effective_user
-    msg  = update.effective_message
-
-    if not chat or not user or not msg:
-        return
-
-    if chat.type == "private":
-        await premium.reply(msg, ":users: Use /rank in a group.")
-        return
-
-    text = await build_my_rank(chat.id, user)
-    await _reply_ranking(msg, text, rank_keyboard("rank"))
-
-
-async def today_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """Show today's ranking card manually."""
-    chat = update.effective_chat
-    msg  = update.effective_message
-
-    if not chat or not msg:
-        return
-
-    if chat.type == "private":
-        await premium.reply(msg, ":users: Use /today in a group.")
-        return
-
-    text = await build_today_top(chat.id)
-    await _reply_ranking(msg, text, rank_keyboard("today"))
+    await _reply_ranking(msg, HUB_TEXT, rankings_keyboard())
 
 
 # ─────────────────────────────────────────────
-# Callbacks
+# Callback — single handler for every rk_* button
 # ─────────────────────────────────────────────
 
-async def rank_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+SECTION_BUILDERS = {
+    "rk_rich": lambda chat, user: build_richest(),
+    "rk_level": lambda chat, user: build_levels(),
+    "rk_rep": lambda chat, user: build_reputation(),
+    "rk_stats": lambda chat, user: build_stats(),
+    "rk_globaltop": lambda chat, user: build_global_top(),
+}
+
+GROUP_ONLY_BUILDERS = {
+    "rk_active": lambda chat, user: build_group_top(chat.id, ":chat: <b>Most Active</b>"),
+    "rk_top": lambda chat, user: build_group_top(chat.id, ":trophy: <b>Chat Top 10</b>"),
+    "rk_rank": lambda chat, user: build_my_rank(chat.id, user),
+    "rk_today": lambda chat, user: build_today_top(chat.id),
+}
+
+
+async def rankings_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    user  = update.effective_user
-    chat  = update.effective_chat
-
+    user = update.effective_user
+    chat = update.effective_chat
     if not query:
         return
-
     await query.answer()
     data = query.data
 
-    if data == "rank_top":
-        if not chat or chat.type == "private":
-            await query.answer("Use this in a group.", show_alert=True)
-            return
-        text   = await build_group_top(chat.id)
-        markup = rank_keyboard("top")
-
-    elif data == "rank_me":
-        if not chat or chat.type == "private":
-            await query.answer("Use this in a group.", show_alert=True)
-            return
-        text   = await build_my_rank(chat.id, user)
-        markup = rank_keyboard("rank")
-
-    elif data == "rank_global":
-        text   = await build_global_top()
-        markup = rank_keyboard("top")
-
-    elif data == "rank_today":
-        if not chat or chat.type == "private":
-            await query.answer("Use this in a group.", show_alert=True)
-            return
-        text   = await build_today_top(chat.id)
-        markup = rank_keyboard("today")
-
-    else:
+    if data.startswith("rk_home"):
+        origin = data.split(":", 1)[1] if ":" in data else None
+        ctx.user_data["rk_origin"] = origin  # "profile" or None
+        await _edit_ranking(query, HUB_TEXT, rankings_keyboard())
         return
 
-    await _edit_ranking(query, text, markup)
-
+    if data == "rk_back":
+        origin = ctx.user_data.pop("rk_origin", None)
+        if origin == "profile":
+            # hand off to your profile module's edit-in-place renderer here
+            pass
+        await _edit_ranking(query, HUB_TEXT, rankings_keyboard())
+        return
+    # ... rest unchanged
 
 # ─────────────────────────────────────────────
 # Daily Milestone Check — call from chat handler
@@ -390,27 +419,18 @@ async def rank_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def check_daily_milestones(bot: Bot, chat_id: int, chat_title: str = ""):
     try:
         today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
-
         count = await db.get_db().messages.count_documents({
-            "chat_id": chat_id,
-            "date":    {"$gte": today_start},
+            "chat_id": chat_id, "date": {"$gte": today_start},
         })
 
-        key  = _today_key(chat_id)
+        key = _today_key(chat_id)
         last = _milestone_cache.get(key, 0)
 
         for milestone in DAILY_MILESTONES:
             if last < milestone <= count:
                 _milestone_cache[key] = milestone
-
-                await premium.send(
-                    bot,
-                    chat_id,
-                    DAILY_MILESTONE_MSGS[milestone],
-                    disable_web_page_preview=True,
-                )
+                await premium.send(bot, chat_id, DAILY_MILESTONE_MSGS[milestone], disable_web_page_preview=True)
                 break
-
     except Exception as e:
         log.debug("Milestone check failed: %s", e)
 
@@ -419,7 +439,8 @@ async def check_daily_milestones(bot: Bot, chat_id: int, chat_title: str = ""):
 # Handlers
 # ─────────────────────────────────────────────
 
-top_cmd_h   = CommandHandler("top",   top_cmd)
-rank_cmd_h  = CommandHandler("rank",  rank_cmd)
-today_cmd_h = CommandHandler("today", today_cmd)
-rank_cb_h   = CallbackQueryHandler(rank_callback, pattern=r"^rank_(top|me|global|today)$")
+RANKINGS = CommandHandler(["rankings", "halloffame"], rankings_cmd)
+RANKINGS_CB = CallbackQueryHandler(
+    rankings_callback,
+    pattern=r"^rk_(rich|level|rep|active|top|globaltop|rank|today|stats|back|home(:\w+)?)$",
+)

@@ -24,3 +24,5 @@ pytz==2024.1
 qrcode
 aiogram
 pyyaml
+grep -i pillow requirements.txt || echo "Pillow" >> requirements.txt
+pip install Pillow --break-system-packages

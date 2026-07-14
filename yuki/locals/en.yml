@@ -45,7 +45,7 @@ help:
     :dot2: /help — Open this help center
     :dot2: /ping — Check my response speed
     :dot2: /health — View bot status
-    :dot2: /me — View your profile
+    :dot2: /profile — View your profile
     :dot2: /stats — Global statistics
 
     </blockquote>
@@ -74,8 +74,7 @@ help:
     :users: <b>Group Management</b>
     <blockquote>
     :dot2: /active — Most active members
-    :dot2: /top — Group leaderboard
-    :dot2: /rank — Your rank card
+    :dot2: /rankings — Hall Of Fame
     :dot2: /maintenance — Toggle maintenance
     :dot2: /broadcast — Broadcast messages
     :dot2: /ban :dot2: /mute :dot2: /unmute
@@ -176,23 +175,26 @@ help:
 
     :trophy: <b>Ranking System</b>
     <blockquote>
-    :dot2: /top — Top 10 leaderboard
-    :dot2: /rank — Your personal rank card
-    :dot2: /globaltop — Global leaderboard
-
+    :dot2: /rankings — Open the Hall of Fame hub
+    :dot2: /halloffame — Same as above
     </blockquote>
 
-    <b>Ranking Features:</b>
+    <b>Inside /rankings you'll find:</b>
     <blockquote>
-    :dot2: Today / Week / Overall tabs
-    :dot2: Progress bars for activity
-    :dot2: Medal ranks :gold: :silver: :bronze:
-    :dot2: Group milestone celebrations
-    :dot2: Rank-up alerts when users climb Top 10
-
+    :gold: Richest — top balances
+    :diamond: Levels — top XP earners
+    :heart: Reputation — most respected
+    :chat: Activity / Chat Top — most active
+    :signal: Global Top — worldwide leaderboard
+    :rank: My Rank — your personal standing
+    :calendar: Today — today's top chatters
+    :love: Love — top couples
+    :refer: Referrals — top inviters
+    :skull: Statistics — Yuki's global stats
+    
     </blockquote>
 
-    <i>Chat more to climb higher in the group rankings.</i>
+    <i>Chat more, love more, and climb higher in the rankings.</i>
 
   page_10: |
     :book: <b>Help Center :dot2: 10/11</b>

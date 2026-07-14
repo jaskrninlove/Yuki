@@ -9,24 +9,26 @@ Otherwise Telegram will safely ignore them.
 
 from telegram import InlineKeyboardButton as Btn, InlineKeyboardMarkup as Markup
 from yuki.core.config import SUPPORT_LINK, UPDATES_CHANNEL
+from yuki.utils.premium import PREMIUM
 
 
 BOT_USERNAME = "yukkichitbot"
 
 
 BUTTON_ICONS = {
-    "add": "6102617459204822706",
-    "help": "5258500400918587241",
-    "support": "5258361295517806281",
-    "updates": "5256227233642605352",
-    "owner": "6116023147352298145",
-    "back": "6237491831869806976",
-    "next": "6242479594570522124",
-    "home": "5262671999573977569",
+    "add": "5258362837411045098",
+    "help": "5454371323595744068",
+    "support": "5172893417717367746",
+    "updates": "4904936030232117798",
+    "owner": "4904565554943099861",
+    "back": "6039539366177541657",
+    "close": "5774077015388852135",
+    "next": "5884123981706956210",
+    "home": "5873147866364514353",
     "gift": "6294236798050638950",
     "rank": "6294073481919208430",
     "refresh": "5355230232724935087",
-    "cancel": "6237927637906364256",
+    "cancel": "5774077015388852135",
     "settings": "5291873529464122510",
     "top": "5334628996887895660",
     "global": "5285439518130857782",
@@ -37,8 +39,8 @@ BUTTON_ICONS = {
     "notes": "6237491831869806976",
     "filter": "6244501154072368012",
     "afk": "5267334530171169409",
-    "yes": "6116023147352298145",
-    "no": "5433892975362995314",
+    "yes": "5123163417326126159",
+    "no": "5121063440311386962",
     
 }
 
@@ -72,7 +74,11 @@ def pbtn(
         api_kwargs["style"] = style
 
     if icon:
-        api_kwargs["icon_custom_emoji_id"] = icon
+        # If icon name is given, convert to emoji id
+        emoji_id = PREMIUM.get(icon) or BUTTON_ICONS.get(icon) or icon
+
+        if emoji_id:
+            api_kwargs["icon_custom_emoji_id"] = str(emoji_id)
 
     return Btn(
         text=text,
@@ -80,7 +86,6 @@ def pbtn(
         url=url,
         api_kwargs=api_kwargs or None,
     )
-
 
 def icon(name: str) -> str | None:
     return BUTTON_ICONS.get(name) or None
@@ -206,63 +211,6 @@ def help_keyboard(page: int, total_pages: int = 11) -> Markup:
         ],
     ])
 
-
-# ── Ranking Keyboards ─────────────────────────────────────────────────────────
-# Use these in ranking.py instead of local rank_keyboard if you want centralized UI.
-
-def rank_keyboard(mode: str = "top") -> Markup:
-    if mode == "rank":
-        return Markup([
-            [
-                pbtn(
-                    "Top 10",
-                    callback_data="rank_top",
-                    style="primary",
-                    icon=icon("top"),
-                ),
-                pbtn(
-                    "Global Top",
-                    callback_data="rank_global",
-                    style="success",
-                    icon=icon("global"),
-                ),
-            ]
-        ])
-
-    return Markup([
-        [
-            pbtn(
-                "Today Rankings",
-                callback_data="rank_today",
-                style="success",
-                icon=icon("rose"),
-            )
-        ],
-        [
-            pbtn(
-                "Top 10",
-                callback_data="rank_top",
-                style="primary",
-                icon=icon("top"),
-            ),
-            pbtn(
-                "My Rank",
-                callback_data="rank_me",
-                style="primary",
-                icon=icon("profile"),
-            ),
-        ],
-        [
-            pbtn(
-                "Global Top",
-                callback_data="rank_global",
-                style="danger",
-                icon=icon("global"),
-            ),
-        ],
-    ])
-
-
 # ── Gift Picker ───────────────────────────────────────────────────────────────
 
 def gift_keyboard(gifts: list, target_user_id: int, page: int = 1) -> Markup:
@@ -353,23 +301,23 @@ def my_gifts_keyboard() -> Markup:
 
 # ── Profile ───────────────────────────────────────────────────────────────────
 
-def profile_keyboard() -> Markup:
-    return Markup([
-        [
-            pbtn(
-                "My Gifts",
-                callback_data="my_gifts",
-                style="success",
-                icon=icon("gift"),
-            ),
-            pbtn(
-                "Leaderboard",
-                callback_data="rank_top",
-                style="primary",
-                icon=icon("rank"),
-            ),
-        ],
-    ])
+# def profile_keyboard() -> Markup:
+#     return Markup([
+#         [
+#             pbtn(
+#                 "My Gifts",
+#                 callback_data="my_gifts",
+#                 style="success",
+#                 icon=icon("gift"),
+#             ),
+#             pbtn(
+#                 "Leaderboard",
+#                 callback_data="rank_top",
+#                 style="primary",
+#                 icon=icon("rank"),
+#             ),
+#         ],
+#     ])
 
 
 # ── Welcome / Rules / Group Customization ─────────────────────────────────────
@@ -576,4 +524,196 @@ def maintenance_keyboard(is_on: bool) -> Markup:
                 icon=icon("back"),
             )
         ],
+    ])
+
+# ==========================================================
+# Profile Keyboard
+# ==========================================================
+
+# ==========================================================
+# Profile Keyboard
+# ==========================================================
+
+# ── Profile ──────────────────────────────────────────────
+
+def profile_keyboard(owner: bool = True):
+    return Markup([
+        [
+            pbtn(" My Gifts", callback_data="my_gifts", style="success", icon="gift"),
+            pbtn(" Wallet", callback_data="wallet", style="primary", icon="gold"),
+        ],
+        [
+            pbtn(" Marriage", callback_data="ring", style="primary", icon="ring"),
+            pbtn(" Gacha Collection", callback_data="profile_gacha", style="success", icon="gift"),
+        ],
+        [
+            pbtn(" Badges", callback_data="profile_badges", style="primary", icon="trophy"),
+            pbtn(" Statistics", callback_data="profile_stats", style="primary", icon="chart"),
+        ],
+        [
+            pbtn(" Refresh", callback_data="profile_refresh", style="success", icon="sparkle"),
+        ],
+    ])
+
+
+def profile_back_keyboard() -> Markup:
+    """Use on my_gifts / wallet / ring / badges / stats sub-pages so Back returns to Profile, not somewhere else."""
+    return Markup([
+        [
+            pbtn(" Back", callback_data="profile_back", style="primary", icon="back"),
+        ]
+    ])
+
+# ==========================================================
+# Rankings
+# ==========================================================
+
+def rankings_keyboard(page: int = 1):
+    if page == 1:
+        return Markup([
+            [
+                pbtn(" Richest", callback_data="rk_rich", style="success", icon="gold"),
+                pbtn(" Levels", callback_data="rk_level", style="primary", icon="star"),
+            ],
+            [
+                pbtn(" Reputation", callback_data="rk_rep", style="primary", icon="heart"),
+                pbtn(" Activity", callback_data="rk_active", style="primary", icon="chart"),
+            ],
+            [
+                pbtn(" Chat Top", callback_data="rk_top", style="primary", icon="trophy"),
+                pbtn(" Global Top", callback_data="rk_globaltop", style="primary", icon="signal"),
+            ],
+            [
+                pbtn(" Next", callback_data="rk_page:2", style="primary", icon="next"),
+            ],
+            [
+                pbtn(" Close", callback_data="close", style="danger", icon="close"),
+            ],
+        ])
+
+    return Markup([
+        [
+            pbtn(" My Rank", callback_data="rk_rank", style="primary", icon="rank"),
+            pbtn(" Today", callback_data="rk_today", style="primary", icon="calendar"),
+        ],
+        [
+            pbtn(" Statistics", callback_data="rk_stats", style="success", icon="database"),
+            pbtn(" Love", callback_data="rk_love", style="primary", icon="heart"),
+        ],
+        [
+            pbtn(" Referrals", callback_data="rk_refer", style="primary", icon="signal"),
+        ],
+        [
+            pbtn(" Back", callback_data="rk_page:1", style="primary", icon="back"),
+            pbtn(" Close", callback_data="close", style="danger", icon="close"),
+        ],
+    ])
+
+def rankings_back_keyboard():
+    return Markup([
+        [
+            pbtn(" Back", callback_data="rk_back", style="primary", icon="back"),
+            pbtn(" Close", callback_data="close", style="danger", icon="close"),
+        ],
+    ])
+# ==========================================================
+# Marriage
+# ==========================================================
+
+def propose_keyboard(proposer_id: int, target_id: int) -> Markup:
+    return Markup([
+        [
+            pbtn(" Accept", callback_data=f"marry_accept:{proposer_id}:{target_id}", style="success", icon="yes"),
+            pbtn(" Reject", callback_data=f"marry_reject:{proposer_id}:{target_id}", style="danger", icon="no"),
+        ]
+    ])
+
+
+def divorce_confirm_keyboard(user_id: int) -> Markup:
+    return Markup([
+        [
+            pbtn(" Yes, Divorce", callback_data=f"divorce_confirm:{user_id}", style="danger", icon="warning"),
+            pbtn(" Cancel", callback_data="cancel", style="primary", icon="no"),
+        ]
+    ])
+
+# ==========================================================
+# Withdrawal
+# ==========================================================
+
+def withdraw_tiers_keyboard(tiers: list) -> Markup:
+    rows = []
+    for cost, label in tiers:
+        rows.append([
+            pbtn(f" {label} — {cost:,} pts", callback_data=f"wd_pick:{cost}", style="primary", icon="gold"),
+        ])
+    rows.append([pbtn(" Cancel", callback_data="cancel", style="danger", icon="no")])
+    return Markup(rows)
+
+
+def withdraw_admin_keyboard(req_id: int) -> Markup:
+    return Markup([
+        [
+            pbtn(" Approve", callback_data=f"wd_approve:{req_id}", style="success", icon="yes"),
+            pbtn(" Reject", callback_data=f"wd_reject:{req_id}", style="danger", icon="no"),
+        ]
+    ])
+
+# ==========================================================
+# Gacha Collection (paginated card browser)
+# ==========================================================
+# Add this near the other rankings/gacha related sections in keyboards.py
+
+COLLECTION_PER_PAGE = 8  # 4 rows x 2 columns
+
+
+def collection_keyboard(companion_ids: list, all_companions: dict, page: int, total_pages: int) -> Markup:
+    """
+    companion_ids: OWNED companion ids to show on THIS page (already sliced).
+    Only pass ids the user actually owns — locked ones are not shown at all.
+    """
+    rows = []
+    row = []
+
+    for cid in companion_ids:
+        data = all_companions[cid]
+
+        row.append(
+            pbtn(
+                data["name"],
+                callback_data=f"col_card:{cid}:{page}",
+                style="success",
+            )
+        )
+
+        if len(row) == 2:
+            rows.append(row)
+            row = []
+
+    if row:
+        rows.append(row)
+
+    nav = []
+
+    if page > 1:
+        nav.append(pbtn("Back", callback_data=f"col_page:{page - 1}", style="primary", icon="back"))
+
+    nav.append(pbtn(f"{page}/{total_pages}", callback_data="noop", style="primary"))
+
+    if page < total_pages:
+        nav.append(pbtn("Next", callback_data=f"col_page:{page + 1}", style="primary", icon="next"))
+
+    rows.append(nav)
+    rows.append([pbtn("Close", callback_data="close", style="danger", icon="close")])
+
+    return Markup(rows)
+
+
+def collection_card_keyboard(page: int) -> Markup:
+    """Shown when viewing a single companion's card — returns to the same collection page."""
+    return Markup([
+        [
+            pbtn("Back", callback_data=f"col_back:{page}", style="primary", icon="back"),
+            pbtn("Close", callback_data="close", style="danger", icon="close"),
+        ]
     ])

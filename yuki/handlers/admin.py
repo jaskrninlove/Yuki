@@ -209,65 +209,6 @@ async def active_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
 
 
-async def me_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    chat = update.effective_chat
-    msg = update.effective_message
-
-    if not user or not msg:
-        return
-
-    await ensure_user(user)
-
-    data = await db.get_user(user.id) or {}
-    gifts = await db.get_user_gifts(user.id) or []
-
-    msgs = int(data.get("total_messages", 0))
-    xp = int(data.get("xp", 0))
-    level = xp // 100
-
-    rank = "—"
-    if chat and chat.type != "private":
-        try:
-            members = await db.get_active_users(chat.id, limit=500)
-            rank_no = next((i + 1 for i, m in enumerate(members) if m.get("user_id") == user.id), None)
-            rank = f"#{rank_no}" if rank_no else "—"
-        except Exception:
-            rank = "—"
-
-    joined = data.get("joined") or data.get("created_at")
-    joined_str = joined.strftime("%d %b %Y") if joined and hasattr(joined, "strftime") else "—"
-
-    gift_display = ""
-    if gifts:
-        gift_display = "\n\n:gift: <b>Recent Gifts:</b>\n" + "\n".join(
-            f"  {g.get('emoji', '🎁')} {html.escape(g.get('gift_name', g.get('name', 'Gift')))}"
-            for g in gifts[:5]
-        )
-
-    text = (
-        ":flower: <b>Your Profile</b>\n\n"
-        "<blockquote>"
-        f":user: <b>Name:</b> {html.escape(full_name(user))}\n"
-        f":id: <b>ID:</b> <code>{user.id}</code>\n"
-        f":chat: <b>Messages:</b> <code>{msgs}</code>\n"
-        f":star: <b>Level:</b> <code>{level}</code>\n"
-        f":sparkle: <b>XP:</b> <code>{xp}</code>\n"
-        f":calendar: <b>Joined:</b> <code>{joined_str}</code>\n"
-        f":trophy: <b>Rank:</b> <code>{rank}</code>\n"
-        f":gift: <b>Gifts:</b> <code>{len(gifts)}</code>"
-        "</blockquote>"
-        f"{gift_display}"
-    )
-
-    await premium.reply(
-        msg,
-        text,
-        reply_markup=profile_keyboard(),
-        disable_web_page_preview=True,
-    )
-
-
 @admin_only
 async def ban_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg = update.effective_message
@@ -627,7 +568,6 @@ stats_cmd_h = CommandHandler("stats", stats_cmd)
 stats_cb_h = CallbackQueryHandler(stats_callback, pattern="^stats$")
 
 active_cmd_h = CommandHandler("active", active_cmd)
-me_cmd_h = CommandHandler("me", me_cmd)
 
 ban_cmd_h = CommandHandler("ban", ban_cmd)
 unban_cmd_h = CommandHandler("unban", unban_cmd)

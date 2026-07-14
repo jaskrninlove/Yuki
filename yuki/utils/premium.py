@@ -16,8 +16,8 @@ TOKEN_RE = re.compile(r":([a-zA-Z0-9_]+):")
 
 PREMIUM = {
     "heart": "6294236798050638950",
-    "flower": "6294070144729619431",
-    "sparkle": "6239978192732429173",
+    "flower": "6294324943664454191",
+    "sparkle": "5999041732996504081",
     "pinkheart": "5260567255145539253",
     "gift": "5262671999573977569",
     "ribbon": "5235471434817498104",
@@ -82,6 +82,29 @@ PREMIUM = {
 
 "dot2": "5819078828017849357",
 
+"wallet": "5215420556089776398",
+"money": "5296355151743838259",
+"coin": "5382164415019768638",
+"bag": "5319009880164570032",
+"bank": "5197369495739455200",
+"sword": "5453991094435997597",
+"target": "5256131095094652290",
+"fire": "5335060684050822126",
+"bolt": "5377834924776627189",
+"diamond": "5228981786477881645",
+"medal": "5454065135377222655",
+"rank": "5188344996356448758",
+"love": "5255861796350224063",
+"giftbox": "5193085063998224234",
+"coii": "5224428893510850014",
+"cat": "5334705202492630985",
+"broken_heart": "5334800026780592575",
+"tada": "5461151367559141950",
+"gem": "5931612473026154687",
+"broken_heart": "5334800026780592575",
+"crossed_swords": "6118209143972040877",
+"skull": "6118209143972040877",
+"refer": "5335005820138564214",
 }
 
 FALLBACK = {
@@ -219,4 +242,34 @@ async def edit_caption(query, caption: str, **kwargs):
         caption=render(caption),
         parse_mode="HTML",
         **kwargs,
+    )
+
+from telegram import InlineKeyboardButton as Btn
+
+
+def pbtn(
+    text: str,
+    *,
+    callback_data: str | None = None,
+    url: str | None = None,
+    style: str | None = None,
+    icon: str | None = None,
+) -> Btn:
+    api_kwargs = {}
+
+    if style:
+        api_kwargs["style"] = style
+
+    if icon:
+        # icon name -> Telegram custom emoji ID
+        emoji_id = PREMIUM.get(icon)
+
+        if emoji_id:
+            api_kwargs["icon_custom_emoji_id"] = emoji_id
+
+    return Btn(
+        text=text,
+        callback_data=callback_data,
+        url=url,
+        api_kwargs=api_kwargs or None,
     )

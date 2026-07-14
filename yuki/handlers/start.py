@@ -15,6 +15,9 @@ from yuki.utils.keyboards import start_keyboard
 from yuki.utils.helpers import ensure_user, full_name
 from yuki.utils import premium
 from yuki.core import database as db
+from yuki.core.database import get_user
+from yuki.database.referral import record_referral, milestone_reward, get_referral_count
+from yuki.database.economy import add_withdraw
 
 log = logging.getLogger("yuki.handlers.start")
 
@@ -39,6 +42,41 @@ async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     if not user or not chat or not msg:
         return
+    
+    is_new_user = (await get_user(user.id)) is None
+
+    if is_new_user and chat.type == "private" and ctx.args:
+        payload = ctx.args[0]
+        if payload.startswith("ref_"):
+            try:
+                referrer_id = int(payload[4:])
+            except ValueError:
+                referrer_id = None
+
+            if referrer_id:
+                old_count = get_referral_count(referrer_id)
+                recorded = record_referral(referrer_id, user.id)
+
+                if recorded:
+                    new_count = old_count + 1
+                    
+                    from yuki.database.achievements import check_referral_milestones
+                    check_referral_milestones(referrer_id, new_count)
+
+                    bonus = milestone_reward(old_count, new_count)
+
+                    if bonus:
+                        add_withdraw(referrer_id, bonus)
+                        try:
+                            await premium.send(
+                                ctx.bot,
+                                referrer_id,
+                                f":tada: <b>Referral Milestone!</b>\n\n"
+                                f"You've referred <code>{new_count}</code> friends!\n"
+                                f":gift: <code>+${bonus}</code> added to your withdrawable balance~",
+                            )
+                        except Exception:
+                            pass
 
     await ensure_user(user)
 
