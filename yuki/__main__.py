@@ -263,17 +263,6 @@ async def post_init(app: Application):
         f"💗 Status: Online",
     )
 
-    # log.info("-" * 72)
-    # log.info("Bot Information")
-    # log.info("-" * 72)
-    # log.info("Username      : @%s", me.username)
-    # log.info("Name          : %s", me.full_name)
-    # log.info("Bot ID        : %s", me.id)
-    # log.info("Version       : %s", BOT_VERSION)
-    # log.info("Owner         : @%s", OWNER_USERNAME)
-    # log.info("Mode          : %s", "Webhook" if WEBHOOK else "Polling")
-    # log.info("-" * 72)
-
     await app.bot.set_my_commands([
         # ───────── Core ─────────
         BotCommand("start",         "Wake me up 🌸"),
@@ -446,6 +435,25 @@ def build_app() -> Application:
     # ── Group 0: all commands & callbacks ─────────────────────────────────────
     group0_handlers = [
         start_h,
+
+        # Moved to the very top so no broader/earlier MessageHandler
+        # (e.g. help_router_handler, emojiid_handler) can shadow these commands.
+        # NOTE: only actual command handlers belong here — connect_forward_h
+        # is a broad content-filter MessageHandler and stays in its original spot below.
+        create_cmd_h,
+        posts_cmd_h,
+        sendpost_cmd_h,
+        delpost_cmd_h,
+        created_post_details_h,
+        created_posts_back_h,
+        send_created_h,
+        delete_created_h,
+        post_cmd_h,
+        post_to_channel_h,
+        post_cancel_h,
+        post_channel_event_h,
+        connect_cmd_h,
+
         help_cmd_h,
         help_router_handler,
         help_cb_h,
@@ -599,20 +607,7 @@ def build_app() -> Application:
 
         emojiid_handler,
 
-        create_cmd_h,
-    posts_cmd_h,
-    sendpost_cmd_h,
-    delpost_cmd_h,
-    created_post_details_h,
-    created_posts_back_h,
-    send_created_h,
-    delete_created_h,
-    post_cmd_h,
-    post_to_channel_h,
-    post_cancel_h,
-    post_channel_event_h,
-    connect_cmd_h,
-    connect_forward_h,
+        connect_forward_h,
     ]
 
     for h in group0_handlers:
