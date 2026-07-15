@@ -30,6 +30,7 @@ from yuki.database.word_game import (
     record_attempt,
     record_solve,
     get_stats,
+    try_claim_schedule_slot,
 )
 from yuki.utils.word_list import random_word, scramble
 from yuki.utils.word_render import render_word_puzzle
@@ -200,6 +201,11 @@ def _random_times_for_day(base_date) -> list[datetime]:
 
 
 async def _schedule_group_for_day(app, chat_id: int, base_date):
+    date_str = base_date.isoformat()
+
+    if not try_claim_schedule_slot(chat_id, date_str):
+        return  # already scheduled today — prevents restart-triggered stacking
+
     now_utc = datetime.utcnow()
     for t in _random_times_for_day(base_date):
         if t <= now_utc:
