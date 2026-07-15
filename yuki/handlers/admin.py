@@ -417,70 +417,150 @@ async def resetdata_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 
 @owner_only
+async def _broadcast_targets(mode: str):
+    users = []
+    groups = []
+
+    if mode in ("users", "both"):
+        users = await db.get_all_users()
+
+    if mode in ("groups", "both"):
+        groups_cursor = db.get_db().groups.find({"active": True}, {"chat_id": 1})
+        groups = [g["chat_id"] async for g in groups_cursor if g.get("chat_id")]
+
+    return users, groups
+
+
+async def _copy_to(bot, chat_id: int, source_chat_id: int, message_id: int, reply_markup):
+    from telegram.error import RetryAfter, Forbidden, BadRequest, TelegramError
+
+    try:
+        await bot.copy_message(
+            chat_id=chat_id,
+            from_chat_id=source_chat_id,
+            message_id=message_id,
+            reply_markup=reply_markup,
+        )
+        return "ok"
+
+    except RetryAfter as e:
+        await asyncio.sleep(e.retry_after + 1)
+        return await _copy_to(bot, chat_id, source_chat_id, message_id, reply_markup)
+
+    except Forbidden:
+        return "blocked"
+
+    except BadRequest as e:
+        msg_text = str(e).lower()
+        if "chat not found" in msg_text or "peer_id_invalid" in msg_text:
+            return "deleted"
+        return "error"
+
+    except TelegramError:
+        return "error"
+
+    except Exception:
+        return "error"
+
+
+@owner_only
 async def broadcast_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg = update.effective_message
 
     if not msg:
         return
 
-    if not ctx.args and not msg.reply_to_message:
+    if not msg.reply_to_message:
         await premium.reply(
             msg,
-            ":signal: <b>Broadcast</b>\n\n"
-            "Reply to a message or send:\n"
-            "<code>/broadcast Your message here</code>",
+            ":signal: <b>Broadcast Usage</b>\n\n"
+            "<blockquote>"
+            "Reply to any message with:\n\n"
+            "<code>/broadcast users</code>\n"
+            "<code>/broadcast groups</code>\n"
+            "<code>/broadcast both</code>\n\n"
+            "Supports text, photos, videos, documents, stickers, "
+            "audio, voice notes, captions and inline buttons — "
+            "original formatting is fully preserved."
+            "</blockquote>",
         )
         return
 
-    target_msg = msg.reply_to_message
-    text_msg = " ".join(ctx.args) if ctx.args else None
+    mode = "both"
+    if ctx.args:
+        mode = ctx.args[0].lower()
 
-    # Extract existing inline buttons from replied message (if any)
-    existing_markup = None
-    if target_msg and target_msg.reply_markup:
-        existing_markup = target_msg.reply_markup
+    if mode not in ("users", "groups", "both"):
+        await premium.reply(
+            msg,
+            ":warning: <b>Invalid Mode</b>\n\n"
+            "Use <code>/broadcast users</code>, <code>/broadcast groups</code>, "
+            "or <code>/broadcast both</code>.",
+        )
+        return
 
-    users = await db.get_all_users()
-    groups_cursor = db.get_db().groups.find({"active": True}, {"chat_id": 1})
-    groups = [g["chat_id"] async for g in groups_cursor if g.get("chat_id")]
+    replied = msg.reply_to_message
+    users, groups = await _broadcast_targets(mode)
+    targets = list(groups) + list(users)
 
-    sent_count = 0
-    fail_count = 0
+    if not targets:
+        await premium.reply(msg, f":warning: No recipients found for mode <code>{mode}</code>.")
+        return
 
-    status = await msg.reply_text(f"Broadcasting to {len(users) + len(groups)} chats...")
+    status = await premium.reply(
+        msg,
+        f":signal: <b>Broadcast In Progress</b>\n\n"
+        f"<blockquote>"
+        f"Mode: <code>{mode}</code>\n"
+        f"Users: <code>{len(users)}</code>\n"
+        f"Groups: <code>{len(groups)}</code>\n"
+        f"Total: <code>{len(targets)}</code>"
+        f"</blockquote>",
+    )
 
-    for chat_id in groups + users:
-        try:
-            if target_msg:
-                # Step 1: Forward as-is (premium emoji + media intact)
-                forwarded = await ctx.bot.forward_message(
-                    chat_id=chat_id,
-                    from_chat_id=target_msg.chat_id,
-                    message_id=target_msg.message_id,
+    stats = {"ok": 0, "blocked": 0, "deleted": 0, "error": 0}
+
+    for index, chat_id in enumerate(targets, start=1):
+        result = await _copy_to(
+            ctx.bot, chat_id, replied.chat_id, replied.message_id, replied.reply_markup
+        )
+        stats[result] += 1
+
+        if index % 25 == 0 or index == len(targets):
+            failed = stats["blocked"] + stats["deleted"] + stats["error"]
+            try:
+                await status.edit_text(
+                    premium.render(
+                        f":signal: <b>Broadcast In Progress</b>\n\n"
+                        f"<blockquote>"
+                        f"Progress: <code>{index}/{len(targets)}</code>\n"
+                        f"Delivered: <code>{stats['ok']}</code>\n"
+                        f"Failed: <code>{failed}</code>"
+                        f"</blockquote>"
+                    ),
+                    parse_mode="HTML",
                 )
-                # Step 2: Patch buttons onto forwarded message
-                if existing_markup:
-                    try:
-                        await ctx.bot.edit_message_reply_markup(
-                            chat_id=chat_id,
-                            message_id=forwarded.message_id,
-                            reply_markup=existing_markup,
-                        )
-                    except Exception:
-                        pass
-            else:
-                await premium.send(ctx.bot, chat_id, text_msg)
+            except Exception:
+                pass
 
-            sent_count += 1
-            await asyncio.sleep(0.05)
-        except Exception:
-            fail_count += 1
+        await asyncio.sleep(0.05)
 
-    result = get("broadcast.success", count=sent_count)
-    if fail_count:
-        result += "\n" + get("broadcast.fail", failed=fail_count)
+    failed = stats["blocked"] + stats["deleted"] + stats["error"]
 
-    await status.edit_text(premium.render(result), parse_mode="HTML")
+    await status.edit_text(
+        premium.render(
+            f":success: <b>Broadcast Completed</b>\n\n"
+            f"<blockquote>"
+            f"Mode: <code>{mode}</code>\n"
+            f"Total Targets: <code>{len(targets)}</code>\n\n"
+            f"Delivered: <code>{stats['ok']}</code>\n"
+            f"Blocked Bot: <code>{stats['blocked']}</code>\n"
+            f"Deleted/Invalid: <code>{stats['deleted']}</code>\n"
+            f"Other Errors: <code>{stats['error']}</code>"
+            f"</blockquote>"
+        ),
+        parse_mode="HTML",
+    )
     
 @owner_only
 async def maintenance_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
