@@ -74,3 +74,16 @@ def record_solve(user_id: int, reward: int):
 
 def get_stats(user_id: int) -> dict:
     return _get_stats(user_id)
+
+word_game_schedule: Collection = DB.word_game_schedule  # _id = "{chat_id}:{date}"
+
+
+def try_claim_schedule_slot(chat_id: int, date_str: str) -> bool:
+    """Returns True only the first time this (chat, day) pair is claimed —
+    safe against duplicate scheduling from bot restarts."""
+    key = f"{chat_id}:{date_str}"
+    try:
+        word_game_schedule.insert_one({"_id": key})
+        return True
+    except Exception:
+        return False
