@@ -80,6 +80,51 @@ def parse_buttons(text: str):
     return clean_text, InlineKeyboardMarkup(rows) if rows else None
 
 
+def _serialize_markup(markup) -> dict | None:
+    """Store a native InlineKeyboardMarkup (e.g. one already attached to the
+    replied-to message, including premium colored/icon buttons) as a plain
+    dict so it can be saved in MongoDB and rebuilt later."""
+    if not markup:
+        return None
+    return markup.to_dict()
+
+
+def _deserialize_markup(data: dict | None, bot=None):
+    """Rebuild an InlineKeyboardMarkup from what _serialize_markup produced."""
+    if not data:
+        return None
+    try:
+        return InlineKeyboardMarkup.de_json(data, bot)
+    except Exception as e:
+        log.debug("Failed to rebuild stored markup: %s", e)
+        return None
+
+
+def _capture_message_content(target):
+    """
+    Pull text (as HTML, preserving bold/blockquote/premium custom-emoji),
+    photo file_id, and native reply_markup off a replied-to message.
+    Returns (text_html, photo_file_id, markup_dict).
+    """
+    if not target:
+        return "", None, None
+
+    photo_file_id = None
+    text_html = ""
+
+    if target.photo:
+        photo_file_id = target.photo[-1].file_id
+        text_html = target.caption_html or target.caption or ""
+    elif target.text:
+        text_html = target.text_html or target.text
+    elif target.caption:
+        text_html = target.caption_html or target.caption
+
+    markup_dict = _serialize_markup(target.reply_markup) if target.reply_markup else None
+
+    return text_html, photo_file_id, markup_dict
+
+
 def format_template(text: str, user, chat) -> str:
     name = html.escape(user.full_name if user else "User")
     first_name = html.escape(user.first_name if user else "User")
@@ -299,28 +344,22 @@ async def setwelcome_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     enabled = data.get("welcome_enabled", True)
     has_text = bool(data.get("welcome_text"))
     has_media = bool(data.get("welcome_photo"))
-    has_buttons = bool(data.get("welcome_buttons"))
+    has_buttons = bool(data.get("welcome_buttons")) or bool(data.get("welcome_markup"))
 
     if msg.reply_to_message:
         target = msg.reply_to_message
-        photo_file_id = None
-        text = ""
 
-        if target.photo:
-            photo_file_id = target.photo[-1].file_id
-            text = target.caption or ""
-        elif target.text:
-            text = target.text
-        elif target.caption:
-            text = target.caption
+        text_html, photo_file_id, native_markup_dict = _capture_message_content(target)
+        clean_text, bracket_markup = parse_buttons(text_html)
 
-        clean_text, _ = parse_buttons(text)
-
-        # Force replace old welcome text with new one
+        # Force replace old welcome text/media/buttons with the new replied message.
         update_data = {
             "welcome_enabled": True,
             "welcome_text": clean_text or "Welcome {MENTION} to <b>{GROUPNAME}</b>.",
-            "welcome_buttons": text,
+            # Keep the raw bracket-syntax text too, for backward-compatible manual editing.
+            "welcome_buttons": text_html if not native_markup_dict else "",
+            # Native buttons captured directly off the replied message (colors/icons intact).
+            "welcome_markup": native_markup_dict,
         }
         if photo_file_id:
             update_data["welcome_photo"] = photo_file_id
@@ -349,7 +388,9 @@ async def setwelcome_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f":filter: Buttons — <b>{'Set' if has_buttons else 'Not set'}</b>\n"
         f"{on_icon} Welcome — <b>{'ON' if enabled else 'OFF'}</b>"
         f"</blockquote>\n\n"
-        "<i>Use the buttons below to customize Yuki welcome.</i>"
+        "<i>Use the buttons below to customize Yuki welcome, "
+        "or just reply to any message (with photo/buttons/premium emoji) "
+        "with <code>/setwelcome</code> to copy it exactly.</i>"
     )
 
     await premium.reply(
@@ -398,7 +439,7 @@ async def welcome_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         enabled   = db_data.get("welcome_enabled", True)
         has_text  = bool(db_data.get("welcome_text"))
         has_media = bool(db_data.get("welcome_photo"))
-        has_btns  = bool(db_data.get("welcome_buttons"))
+        has_btns  = bool(db_data.get("welcome_buttons")) or bool(db_data.get("welcome_markup"))
 
         on_icon = ":yes:" if enabled else ":no:"
 
@@ -461,7 +502,8 @@ async def welcome_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "<blockquote>"
             ":sparkle: Go to your group and reply to a photo with:\n"
             "<code>/setwelcome</code>\n\n"
-            ":settings: The caption will become your welcome text automatically!"
+            ":settings: The caption (with formatting, premium emoji and buttons) "
+            "will become your welcome message automatically!"
             "</blockquote>\n\n"
             "<i>This keeps media quality and formatting perfect.</i>",
             reply_markup=back_to_panel_keyboard(chat_id),
@@ -483,7 +525,10 @@ async def welcome_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             "<code>[Support - https://t.me/xenorachatz] [Updates - https://t.me/xenoraorg]</code>\n\n"
             ":global: <b>New row — send each on a new line:</b>\n"
             "<code>[Button1 - https://link]</code>\n"
-            "<code>[Button2 - https://link]</code>"
+            "<code>[Button2 - https://link]</code>\n\n"
+            "<i>Tip: instead of typing this, you can just reply to a message "
+            "that already has buttons with <code>/setwelcome</code> "
+            "to copy them exactly.</i>"
             "</blockquote>\n\n"
             "<i>Just send the button format below!</i>",
             reply_markup=back_to_panel_keyboard(chat_id),
@@ -522,12 +567,14 @@ async def welcome_setup_text_handler(update: Update, ctx: ContextTypes.DEFAULT_T
     if user.id in WAITING_WELCOME_TEXT:
         chat_id = WAITING_WELCOME_TEXT.pop(user.id)
 
+        text_html = msg.text_html or msg.text
+
         # Overwrite — unset $set replaces the field fully
         await db.get_db().chat_settings.update_one(
             {"chat_id": chat_id},
             {
                 "$set": {
-                    "welcome_text":    msg.text,
+                    "welcome_text":    text_html,
                     "welcome_enabled": True,
                 },
                 "$setOnInsert": {"chat_id": chat_id},
@@ -556,6 +603,7 @@ async def welcome_setup_text_handler(update: Update, ctx: ContextTypes.DEFAULT_T
             {
                 "$set": {
                     "welcome_buttons": msg.text,
+                    "welcome_markup": None,  # manual bracket-text buttons override any captured native markup
                     "welcome_enabled": True,
                 },
                 "$setOnInsert": {"chat_id": chat_id},
@@ -579,10 +627,16 @@ async def welcome_setup_text_handler(update: Update, ctx: ContextTypes.DEFAULT_T
     if user.id in WAITING_RULES_TEXT:
         chat_id = WAITING_RULES_TEXT.pop(user.id)
 
+        text_html = msg.text_html or msg.text
+        markup_dict = _serialize_markup(msg.reply_markup) if msg.reply_markup else None
+
         await db.get_db().chat_settings.update_one(
             {"chat_id": chat_id},
             {
-                "$set": {"rules_text": msg.text},
+                "$set": {
+                    "rules_text": text_html,
+                    "rules_markup": markup_dict,
+                },
                 "$setOnInsert": {"chat_id": chat_id},
             },
             upsert=True,
@@ -612,9 +666,15 @@ async def send_welcome_preview(query, ctx, chat_id: int):
     welcome_text = data.get("welcome_text") or "Welcome {MENTION} to <b>{GROUPNAME}</b>."
     welcome_photo = data.get("welcome_photo")
     buttons_raw   = data.get("welcome_buttons") or ""
+    native_markup = _deserialize_markup(data.get("welcome_markup"), ctx.bot)
 
     final_text = format_template(welcome_text, user, chat)
-    _, markup  = parse_buttons(buttons_raw)
+
+    if native_markup:
+        markup = native_markup
+    else:
+        final_text, markup = parse_buttons(final_text)
+
     final_text = premium.render(final_text)
 
     try:
@@ -657,21 +717,20 @@ async def setgoodbye_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     target       = msg.reply_to_message
     raw_text     = " ".join(ctx.args).strip()
-    photo_file_id = None
-    text         = raw_text
 
     if target:
-        if target.photo:
-            photo_file_id = target.photo[-1].file_id
-            text = target.caption or raw_text or ""
-        elif target.text:
-            text = target.text
+        text_html, photo_file_id, markup_dict = _capture_message_content(target)
+        text = text_html or raw_text
+    else:
+        text = raw_text
+        photo_file_id = None
+        markup_dict = None
 
     if not text and not photo_file_id:
         await premium.reply(
             msg,
             ":filter: <b>Set Goodbye</b>\n\n"
-            "Reply to text/photo with <code>/setgoodbye</code>\n"
+            "Reply to text/photo (with buttons/premium emoji) with <code>/setgoodbye</code>\n"
             "or use <code>/setgoodbye Goodbye {NAME}</code>",
         )
         return
@@ -680,6 +739,7 @@ async def setgoodbye_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         "goodbye_enabled": True,
         "goodbye_text":    text,
         "goodbye_photo":   photo_file_id,
+        "goodbye_markup":  markup_dict,
     })
 
     await premium.reply(msg, ":yes: <b>Goodbye message saved and enabled.</b>")
@@ -698,23 +758,30 @@ async def setrules_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     target   = msg.reply_to_message
     raw_text = " ".join(ctx.args).strip()
-    text     = raw_text
 
-    if target and target.text:
-        text = target.text
-    elif target and target.caption:
-        text = target.caption
+    if target:
+        text_html, photo_file_id, markup_dict = _capture_message_content(target)
+        text = text_html or raw_text
+    else:
+        text = raw_text
+        photo_file_id = None
+        markup_dict = None
 
-    if not text:
+    if not text and not photo_file_id:
         await premium.reply(
             msg,
             ":rules: <b>Set Rules</b>\n\n"
-            "Reply to rules text with <code>/setrules</code>\n"
+            "Reply to rules text/photo (with buttons/premium emoji/formatting) "
+            "with <code>/setrules</code>\n"
             "or use <code>/setrules Be kind. No spam.</code>",
         )
         return
 
-    await save_chat_settings(chat.id, {"rules_text": text})
+    await save_chat_settings(chat.id, {
+        "rules_text":   text,
+        "rules_photo":  photo_file_id,
+        "rules_markup": markup_dict,
+    })
     await premium.reply(msg, ":yes: <b>Rules saved.</b>", reply_markup=rules_keyboard_panel())
 
 
@@ -733,14 +800,30 @@ async def rules_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await premium.reply(msg, ":rules: No rules have been set for this group.")
         return
 
-    text, markup = parse_buttons(format_template(rules, update.effective_user, chat))
+    rules_photo  = data.get("rules_photo")
+    native_markup = _deserialize_markup(data.get("rules_markup"), ctx.bot)
 
-    await premium.reply(
-        msg,
-        text,
-        reply_markup=markup,
-        disable_web_page_preview=True,
-    )
+    text = format_template(rules, update.effective_user, chat)
+
+    if native_markup:
+        markup = native_markup
+    else:
+        text, markup = parse_buttons(text)
+
+    if rules_photo:
+        await premium.reply_photo(
+            msg,
+            photo=rules_photo,
+            caption=text,
+            reply_markup=markup,
+        )
+    else:
+        await premium.reply(
+            msg,
+            text,
+            reply_markup=markup,
+            disable_web_page_preview=True,
+        )
 
 
 @admin_only
@@ -804,6 +887,7 @@ async def welcome_member_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
     welcome_text  = data.get("welcome_text") or "Welcome {MENTION} to <b>{GROUPNAME}</b>."
     welcome_photo = data.get("welcome_photo")
     buttons_raw   = data.get("welcome_buttons") or ""
+    native_markup = _deserialize_markup(data.get("welcome_markup"), ctx.bot)
 
     for user in msg.new_chat_members:
         if user.is_bot:
@@ -815,7 +899,11 @@ async def welcome_member_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
         })
 
         final_text = format_template(welcome_text, user, chat)
-        _, markup  = parse_buttons(buttons_raw)
+
+        if native_markup:
+            markup = native_markup
+        else:
+            final_text, markup = parse_buttons(final_text)
 
         try:
             if welcome_photo:
@@ -851,9 +939,15 @@ async def goodbye_member_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
 
     goodbye_text  = data.get("goodbye_text") or "Goodbye {NAME}."
     goodbye_photo = data.get("goodbye_photo")
+    native_markup = _deserialize_markup(data.get("goodbye_markup"), ctx.bot)
 
     user = msg.left_chat_member
-    final_text, markup = parse_buttons(format_template(goodbye_text, user, chat))
+    final_text = format_template(goodbye_text, user, chat)
+
+    if native_markup:
+        markup = native_markup
+    else:
+        final_text, markup = parse_buttons(final_text)
 
     try:
         if goodbye_photo:
