@@ -102,47 +102,51 @@ Reply with the correct word to win!
 # Answer listener
 # ==========================================================
 
-async def word_answer_listener(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    message = update.effective_message
-    user = update.effective_user
-    chat = update.effective_chat
+async def try_consume_guess(bot, chat, user, message, text: str) -> bool:
+    """Checks if `text` solves the active puzzle in this chat.
+    Returns True if solved (handles reward + announcement itself).
+    Never raises — always safe to call from the main chat handler."""
+    try:
+        if not chat or not user or user.is_bot:
+            return False
 
-    if not message or not user or user.is_bot or not message.text:
-        return
-
-    puzzle = _active_cache.get(chat.id)
-    if not puzzle:
-        puzzle = get_active_puzzle(chat.id)
+        puzzle = _active_cache.get(chat.id)
         if not puzzle:
-            return
-        _active_cache[chat.id] = {"word": puzzle["word"], "scrambled": puzzle["scrambled"], "reward": puzzle["reward"]}
-        puzzle = _active_cache[chat.id]
+            puzzle = get_active_puzzle(chat.id)
+            if not puzzle:
+                return False
+            _active_cache[chat.id] = {
+                "word": puzzle["word"],
+                "scrambled": puzzle["scrambled"],
+                "reward": puzzle["reward"],
+            }
+            puzzle = _active_cache[chat.id]
 
-    guess = message.text.strip().lower()
-    answer = puzzle["word"].strip().lower()
+        guess = text.strip().lower()
+        answer = puzzle["word"].strip().lower()
 
-    if guess != answer:
-        return  # not shaped like a guess, ignore cheaply
+        if len(guess) != len(answer):
+            return False
 
-    if guess != puzzle["word"]:
-        record_attempt(user.id)
-        return
+        if guess != answer:
+            record_attempt(user.id)
+            return False
 
-    # Correct! Race won.
-    reward = puzzle["reward"]
+        # Correct! Race won.
+        reward = puzzle["reward"]
 
-    _active_cache.pop(chat.id, None)
-    clear_active_puzzle(chat.id)
+        _active_cache.pop(chat.id, None)
+        clear_active_puzzle(chat.id)
 
-    add(user.id, reward)
-    record_solve(user.id, reward)
+        add(user.id, reward)
+        record_solve(user.id, reward)
 
-    from yuki.utils.helpers import mention_html
-    from yuki.utils import premium
+        from yuki.utils.helpers import mention_html
+        from yuki.utils import premium
 
-    await premium.reply(
-        message,
-        f"""
+        await premium.reply(
+            message,
+            f"""
 :tada: <b>Solved!</b>
 
 {mention_html(user)} unscrambled it first~
@@ -150,9 +154,13 @@ async def word_answer_listener(update: Update, context: ContextTypes.DEFAULT_TYP
 :key: The word was <b>{puzzle['word'].upper()}</b>
 :gift: <code>+{reward}</code> coins added to your balance!
 """,
-        disable_web_page_preview=True,
-    )
+            disable_web_page_preview=True,
+        )
+        return True
 
+    except Exception as e:
+        log.warning("try_consume_guess failed: %s", e)
+        return False
 
 # ==========================================================
 # "My Solved Words" button — private popup, doesn't touch the shared puzzle
@@ -171,12 +179,6 @@ async def word_stats_callback(update: Update, context: ContextTypes.DEFAULT_TYPE
         show_alert=True,
     )
 
-
-WORD_ANSWER_HANDLER = MessageHandler(
-    filters.TEXT & ~filters.COMMAND & ~filters.UpdateType.EDITED_MESSAGE,
-    word_answer_listener,
-    block=False,
-)
 WORD_STATS_CB = CallbackQueryHandler(word_stats_callback, pattern=r"^wg_stats$")
 
 
@@ -268,6 +270,14 @@ async def testword_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await send_puzzle(context.bot, chat.id)
+
+    # Debug: reveal the answer directly so testing doesn't need DB access
+    puzzle = get_active_puzzle(chat.id)
+    if puzzle:
+        await context.bot.send_message(
+            chat_id=chat.id,
+            text=f"[DEBUG] Answer is: {puzzle['word']}",
+        )
 
 
 TESTWORD_CMD = CommandHandler("testword", testword_cmd)
