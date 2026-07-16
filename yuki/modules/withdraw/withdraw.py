@@ -247,7 +247,7 @@ Contact support if you believe this is a mistake.
 WITHDRAW = CommandHandler("withdraw", withdraw_cmd)
 WITHDRAW_TIER_CB = CallbackQueryHandler(withdraw_tier_pick, pattern=r"^wd_pick:\d+$")
 WITHDRAW_CONTACT_CAPTURE = MessageHandler(
-    filters.TEXT & filters.REPLY & filters.ChatType.PRIVATE,
+    filters.TEXT & filters.REPLY & filters.ChatType.PRIVATE & ~filters.COMMAND,
     withdraw_contact_capture,
 )
 WITHDRAW_ADMIN_CB = CallbackQueryHandler(withdraw_admin_callback, pattern=r"^wd_(approve|reject):\d+$")
