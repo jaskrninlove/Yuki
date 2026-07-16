@@ -351,66 +351,33 @@ async def setwelcome_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     await save_group(chat)
 
-    data = await get_chat_settings(chat.id)
-    enabled = data.get("welcome_enabled", True)
-    has_text = bool(data.get("welcome_text"))
-    has_media = bool(data.get("welcome_photo"))
-    has_buttons = bool(data.get("welcome_buttons")) or bool(data.get("welcome_markup"))
-
-    if msg.reply_to_message:
-        target = msg.reply_to_message
-
-        text_html, photo_file_id, native_markup_dict = _capture_message_content(target)
-        clean_text, bracket_markup = parse_buttons(text_html)
-
-        # Force replace old welcome text/media/buttons with the new replied message.
-        update_data = {
-            "welcome_enabled": True,
-            "welcome_text": clean_text or "Welcome {MENTION} to <b>{GROUPNAME}</b>.",
-            # Keep the raw bracket-syntax text too, for backward-compatible manual editing.
-            "welcome_buttons": text_html if not native_markup_dict else "",
-            # Native buttons captured directly off the replied message (colors/icons intact).
-            "welcome_markup": native_markup_dict,
-        }
-        if photo_file_id:
-            update_data["welcome_photo"] = photo_file_id
-
-        await save_chat_settings(chat.id, update_data)
-
+    if not msg.reply_to_message:
         await premium.reply(
             msg,
-            ":success: <b>Welcome message updated!</b>\n\n"
-            f"<blockquote>"
-            f":group: <b>Group:</b> {html.escape(chat.title or 'Group')}\n"
-            f":settings: <b>Status:</b> Enabled"
-            f"</blockquote>",
-            reply_markup=welcome_panel_keyboard(chat.id),
+            ":welcome: <b>Set Welcome</b>\n\n"
+            "Reply to the message you want as your welcome "
+            "(text, photo, buttons, premium emoji — all supported) with "
+            "<code>/setwelcome</code>",
         )
         return
 
-    on_icon = ":yes:" if enabled else ":no:"
+    target = msg.reply_to_message
 
-    text = (
-        ":welcome: <b>Welcome Settings</b>\n\n"
-        f"<blockquote>"
-        f":group: <b>Group:</b> {html.escape(chat.title or 'Group')}\n\n"
-        f":notes: Text — <b>{'Set' if has_text else 'Not set'}</b>\n"
-        f":gift: Media — <b>{'Set' if has_media else 'Not set'}</b>\n"
-        f":filter: Buttons — <b>{'Set' if has_buttons else 'Not set'}</b>\n"
-        f"{on_icon} Welcome — <b>{'ON' if enabled else 'OFF'}</b>"
-        f"</blockquote>\n\n"
-        "<i>Use the buttons below to customize Yuki welcome, "
-        "or just reply to any message (with photo/buttons/premium emoji) "
-        "with <code>/setwelcome</code> to copy it exactly.</i>"
-    )
+    text_html, photo_file_id, native_markup_dict = _capture_message_content(target)
+    clean_text, bracket_markup = parse_buttons(text_html)
 
-    await premium.reply(
-        msg,
-        text,
-        reply_markup=welcome_panel_keyboard(chat.id),
-        disable_web_page_preview=True,
-    )
+    update_data = {
+        "welcome_enabled": True,
+        "welcome_text": clean_text or "Welcome {MENTION} to <b>{GROUPNAME}</b>.",
+        "welcome_buttons": text_html if not native_markup_dict else "",
+        "welcome_markup": native_markup_dict,
+    }
+    if photo_file_id:
+        update_data["welcome_photo"] = photo_file_id
 
+    await save_chat_settings(chat.id, update_data)
+
+    await premium.reply(msg, ":success: <b>Welcome message set!</b>")
 
 async def welcome_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
