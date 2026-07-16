@@ -158,12 +158,19 @@ def _mark_sticker(chat_id: int):
 # Activity Tracking
 # ─────────────────────────────────────────────
 
-async def _track_activity(user, chat, kind: str = "text", text: str | None = None):
+async def _track_activity(bot, user, chat, kind: str = "text", text: str | None = None):
     try:
         await ensure_user(user)
         await db.increment_user_messages(user.id, chat.id)
         if text:
             await db.log_message(chat.id, user.id, text)
+
+            if chat.type != "private":
+                try:
+                    from yuki.modules.rankings.rankings import check_daily_milestones
+                    await check_daily_milestones(bot, chat.id, chat.title or "")
+                except Exception as e:
+                    log.debug("Milestone check failed: %s", e)
 
         inc = {"xp": 5, "rank_score": 5, "daily_messages": 1, "weekly_messages": 1, "monthly_messages": 1}
         if kind == "text":    inc["text_messages"] = 1
@@ -227,7 +234,7 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     loop = asyncio.get_event_loop()
 
     # Always track activity (no admin needed for tracking in group context already guarded above)
-    loop.create_task(_track_activity(user, chat, "text", text))
+    loop.create_task(_track_activity(ctx.bot, user, chat, "text", text))
 
     # Save reply context
     if msg.reply_to_message and msg.reply_to_message.text:
@@ -240,6 +247,13 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
 
     _push_history(chat.id, "user", f"{user.first_name}: {text}")
+    # ── Word Game answer check (isolated; can never block normal chat) ──
+    try:
+        from yuki.modules.wordgame.game import try_consume_guess
+        if await try_consume_guess(ctx.bot, chat, user, msg, text):
+            return
+    except Exception as e:
+        log.debug("Word game check failed (ignored): %s", e)
 
     # ── Decide whether Yuki should reply ──
     should_reply = False
@@ -327,7 +341,7 @@ async def handle_photo(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
         return
 
-    asyncio.get_event_loop().create_task(_track_activity(user, chat, "photo"))
+    asyncio.get_event_loop().create_task(_track_activity(ctx.bot, user, chat, "photo"))
 
 
 async def handle_video(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -342,7 +356,7 @@ async def handle_video(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
         return
 
-    asyncio.get_event_loop().create_task(_track_activity(user, chat, "video"))
+    asyncio.get_event_loop().create_task(_track_activity(ctx.bot, user, chat, "video"))
 
 
 async def handle_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -357,7 +371,7 @@ async def handle_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
         return
 
-    asyncio.get_event_loop().create_task(_track_activity(user, chat, "voice"))
+    asyncio.get_event_loop().create_task(_track_activity(ctx.bot, user, chat, "voice"))
 
 
 async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -381,7 +395,7 @@ async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
         return
 
-    asyncio.get_event_loop().create_task(_track_activity(user, chat, "sticker"))
+    asyncio.get_event_loop().create_task(_track_activity(ctx.bot, user, chat, "sticker"))
 
     in_dm = chat.type == "private"
     is_reply_to_yuki = (
