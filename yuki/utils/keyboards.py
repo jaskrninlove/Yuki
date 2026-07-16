@@ -41,6 +41,7 @@ BUTTON_ICONS = {
     "afk": "5267334530171169409",
     "yes": "5123163417326126159",
     "no": "5121063440311386962",
+    "feature": "5258024802010026053",
     
 }
 
@@ -127,6 +128,14 @@ def start_keyboard(is_group: bool = False) -> Markup:
         ],
         [
             pbtn(
+                "New Features",
+                callback_data="newcmds:1",
+                style="primary",
+                icon=icon("feature"),
+            )
+        ],
+        [
+            pbtn(
                 "Support",
                 url=SUPPORT_LINK,
                 style="primary",
@@ -199,6 +208,47 @@ def help_keyboard(page: int, total_pages: int = 11) -> Markup:
             )
         )
 
+    return Markup([
+        nav,
+        [
+            pbtn(
+                "Home",
+                callback_data="back_start",
+                style="success",
+                icon=icon("home"),
+            )
+        ],
+    ])
+
+# ── New Commands Pages ───────────────────────────────────────────────────────
+def newcmds_keyboard(page: int, total_pages: int = 4) -> Markup:
+    nav = []
+    if page > 1:
+        nav.append(
+            pbtn(
+                "Prev",
+                callback_data=f"newcmds:{page - 1}",
+                style="primary",
+                icon=icon("back"),
+            )
+        )
+    nav.append(
+        pbtn(
+            f"{page}/{total_pages}",
+            callback_data="noop",
+            style="primary",
+            icon=icon("help"),
+        )
+    )
+    if page < total_pages:
+        nav.append(
+            pbtn(
+                "Next",
+                callback_data=f"newcmds:{page + 1}",
+                style="primary",
+                icon=icon("next"),
+            )
+        )
     return Markup([
         nav,
         [
