@@ -184,39 +184,56 @@ WORD_STATS_CB = CallbackQueryHandler(word_stats_callback, pattern=r"^wg_stats$")
 # Scheduling
 # ==========================================================
 
-def _random_times_for_day(base_date) -> list[datetime]:
-    """Pick SENDS_PER_DAY random UTC datetimes within the IST window,
-    spaced at least MIN_GAP_MINUTES apart."""
-    start_ist = datetime.combine(base_date, WINDOW_START_IST)
-    end_ist = datetime.combine(base_date, WINDOW_END_IST)
-    window_minutes = int((end_ist - start_ist).total_seconds() / 60)
+def _random_times_in_range(start_utc: datetime, end_utc: datetime, count: int) -> list[datetime]:
+    """Pick up to `count` random UTC datetimes between start and end,
+    spaced by at least MIN_GAP_MINUTES where the window allows it."""
+    window_minutes = int((end_utc - start_utc).total_seconds() / 60)
+    if window_minutes <= 0:
+        return []
 
+    count = max(1, min(count, (window_minutes // max(MIN_GAP_MINUTES, 1)) + 1))
+    count = min(count, window_minutes + 1)
+
+    offsets = sorted(random.sample(range(window_minutes + 1), count))
     for _ in range(50):
-        offsets = sorted(random.sample(range(window_minutes), SENDS_PER_DAY))
         if all(offsets[i + 1] - offsets[i] >= MIN_GAP_MINUTES for i in range(len(offsets) - 1)):
             break
+        offsets = sorted(random.sample(range(window_minutes + 1), count))
 
-    times_ist = [start_ist + timedelta(minutes=m) for m in offsets]
-    return [t - IST_OFFSET for t in times_ist]  # convert to naive UTC
+    return [start_utc + timedelta(minutes=m) for m in offsets]
 
 
 async def _schedule_group_for_day(app, chat_id: int, base_date):
     date_str = base_date.isoformat()
 
     if not try_claim_schedule_slot(chat_id, date_str):
-        return  # already scheduled today — prevents restart-triggered stacking
+        return  # already scheduled today
 
     now_utc = datetime.utcnow()
-    for t in _random_times_for_day(base_date):
-        if t <= now_utc:
-            continue
+
+    start_ist = datetime.combine(base_date, WINDOW_START_IST)
+    end_ist = datetime.combine(base_date, WINDOW_END_IST)
+    start_utc = start_ist - IST_OFFSET
+    end_utc = end_ist - IST_OFFSET
+
+    if now_utc >= end_utc:
+        return  # today's window is fully over, nothing to schedule
+
+    # Start from "now" (with a small buffer) if scheduling happens mid-window,
+    # so late scheduling still guarantees sends for the rest of today.
+    effective_start = max(now_utc + timedelta(minutes=2), start_utc)
+
+    times = _random_times_in_range(effective_start, end_utc, SENDS_PER_DAY)
+
+    for t in times:
         delay = (t - now_utc).total_seconds()
+        if delay <= 0:
+            continue
         app.job_queue.run_once(
             lambda ctx, cid=chat_id: ctx.application.create_task(send_puzzle(ctx.bot, cid)),
             when=delay,
             name=f"wordgame_{chat_id}_{t.isoformat()}",
         )
-
 
 async def _daily_reschedule(context: ContextTypes.DEFAULT_TYPE):
     app = context.application
