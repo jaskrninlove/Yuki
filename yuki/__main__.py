@@ -36,11 +36,11 @@ from yuki.handlers.chat import (
     photo_handler,
     video_handler,
     voice_handler,
+    sticker_handler,
     init_bot_info,
 )
-
+...
 from yuki.plugins.stickers import (
-    sticker_handler,
     addsticker_handler,
     stickers_count_handler,
     clearstickers_handler,
@@ -174,7 +174,6 @@ from yuki.plugins.vibes import (
 )
 
 from yuki.modules.wordgame.game import (
-    WORD_ANSWER_HANDLER,
     WORD_STATS_CB,
     TESTWORD_CMD,
     register_word_game_job,
@@ -616,7 +615,7 @@ def build_app() -> Application:
     # ── Group 1: watchers ─────────────────────────────────────────────────────
     app.add_handler(filter_watch_h,   group=1)
     app.add_handler(afk_watch_h,      group=1)
-    app.add_handler(WORD_ANSWER_HANDLER, group=2)
+    # app.add_handler(WORD_ANSWER_HANDLER, group=2)
     app.add_handler(auto_save_handler, group=1)  # fallback group saver
 
     # ── Group 2: chat catch-all (always last) ─────────────────────────────────
@@ -624,6 +623,7 @@ def build_app() -> Application:
     app.add_handler(photo_handler,   group=2)
     app.add_handler(video_handler,   group=2)
     app.add_handler(voice_handler,   group=2)
+    # app.add_handler(WORD_ANSWER_HANDLER, group=2)
     app.add_handler(text_handler,    group=2)
     app.add_handler(XP_HANDLER, group=10)
     app.add_handler(
