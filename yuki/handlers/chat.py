@@ -17,7 +17,7 @@ import time as _time
 from telegram import Update, Bot
 from telegram.ext import MessageHandler, filters, ContextTypes
 from telegram.constants import ChatAction
-
+from yuki.plugins.stickers import get_random_sticker
 from yuki.core import database as db
 from yuki.utils.brain import get_reply, _smart_fallback
 from yuki.utils.helpers import ensure_user
@@ -35,6 +35,20 @@ _last_reply: dict[int, datetime]  = {}
 _user_last: dict[int, datetime]   = {}
 _last_sticker: dict[int, datetime] = {}
 _replied_streak: dict[int, int]   = defaultdict(int)
+import random  # already imported at top, confirm it's there
+
+_last_random_sticker: dict[int, datetime] = {}
+RANDOM_STICKER_CHANCE = 0.06        # 6% chance per group reply
+RANDOM_STICKER_COOLDOWN = 30 * 60   # at least 30 min between random stickers per chat
+
+
+def _can_random_sticker(chat_id: int) -> bool:
+    now = datetime.utcnow()
+    return (now - _last_random_sticker.get(chat_id, datetime.min)).total_seconds() > RANDOM_STICKER_COOLDOWN
+
+
+def _mark_random_sticker(chat_id: int):
+    _last_random_sticker[chat_id] = datetime.utcnow()
 
 # Cooldowns (seconds)
 _CHAT_COOLDOWN    = 5
@@ -187,6 +201,9 @@ async def _send_typing(chat_id: int, ctx):
 # Main Text Handler — pure AI, no keyword system
 # ─────────────────────────────────────────────
 
+# Replace handle_text in yuki/handlers/chat.py with this instrumented version.
+# Temporary — remove the print() lines once the issue is found.
+
 async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg  = update.effective_message
     user = update.effective_user
@@ -280,6 +297,18 @@ async def handle_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             _push_history(chat.id, "assistant", reply_text)
         except Exception as e:
             log.warning("Reply failed: %s", e)
+            return
+
+    # Rare, natural sticker reaction — only in groups, heavily cooldown-limited
+    if chat.type != "private" and _can_random_sticker(chat.id):
+        if random.random() < RANDOM_STICKER_CHANCE:
+            sticker_id = await get_random_sticker()
+            if sticker_id:
+                try:
+                    await ctx.bot.send_sticker(chat_id=chat.id, sticker=sticker_id)
+                    _mark_random_sticker(chat.id)
+                except Exception:
+                    pass
 
 
 # ─────────────────────────────────────────────
@@ -333,11 +362,11 @@ async def handle_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
 async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """
-    Sticker handler.
     - Age guard: ignores stickers sent before bot started
     - Admin guard: only works when Yuki is admin (groups)
     - Only replies when: DM, OR the sticker is a direct reply to Yuki's own message
     - Never reacts to random/ambient stickers in a group
+    - Replies with a real sticker from the safe pool when possible
     """
     msg  = update.effective_message
     user = update.effective_user
@@ -369,13 +398,77 @@ async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 
     _mark_replied(chat.id, user.id)
 
-    emoji = getattr(msg.sticker, "emoji", "") or ""
+    sticker_id = await get_random_sticker()
+    if sticker_id:
+        try:
+            await msg.reply_sticker(sticker=sticker_id)
+            return
+        except Exception as e:
+            log.debug("Sticker reply failed, falling back to text: %s", e)
 
     try:
         from yuki.utils.brain import get_sticker_reply_text
+        emoji = getattr(msg.sticker, "emoji", "") or ""
         reply_text = await get_sticker_reply_text(emoji)
         if reply_text:
             await msg.reply_text(reply_text, parse_mode="HTML")
+    except Exception as e:
+        log.debug("Sticker text fallback failed: %s", e)
+
+# ------------------------------------------------
+# PRIVATE CHAT
+# ------------------------------------------------
+    if in_dm:
+       pass
+
+# ------------------------------------------------
+# GROUP
+# ------------------------------------------------
+    else:
+
+    # Cooldown
+      if not _can_sticker_reply(chat.id):
+        return
+
+      if not _can_reply(chat.id, user.id):
+        return
+
+      should_reply = False
+
+    # User replied to Yuki
+      if (
+        msg.reply_to_message
+        and msg.reply_to_message.from_user
+        and msg.reply_to_message.from_user.id == _bot_id
+      ):
+        should_reply = True
+
+    # Small random chance for natural behaviour
+      elif random.randint(1, 100) <= 8:
+        should_reply = True
+
+      if not should_reply:
+         return
+
+    _mark_replied(chat.id, user.id)
+    _mark_sticker(chat.id)
+
+    emoji = getattr(msg.sticker, "emoji", "") or "🙂"
+
+    try:
+       from yuki.utils.brain import get_sticker_reply_text
+
+       reply_text = await asyncio.wait_for(
+          get_sticker_reply_text(emoji),
+          timeout=5,
+       )
+
+       if reply_text:
+          await msg.reply_text(
+             reply_text,
+             parse_mode="HTML",
+          )
+
     except Exception as e:
         log.debug("Sticker reply failed: %s", e)
 
