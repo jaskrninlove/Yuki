@@ -35,7 +35,18 @@ WAITING_WELCOME_TEXT: dict[int, int] = {}
 WAITING_WELCOME_BUTTONS: dict[int, int] = {}
 WAITING_RULES_TEXT: dict[int, int] = {}
 
+_RECENT_WELCOMES: dict[tuple, float] = {}
+_WELCOME_DEDUP_WINDOW = 20  # seconds
 
+
+def _already_welcomed_recently(chat_id: int, user_id: int) -> bool:
+    key = (chat_id, user_id)
+    now = time.time()
+    last = _RECENT_WELCOMES.get(key, 0)
+    if now - last < _WELCOME_DEDUP_WINDOW:
+        return True
+    _RECENT_WELCOMES[key] = now
+    return False
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
@@ -870,6 +881,53 @@ async def goodbye_toggle_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # Welcome / Goodbye Senders
 # ─────────────────────────────────────────────
 
+async def _dispatch_welcome(ctx: ContextTypes.DEFAULT_TYPE, chat, user):
+    """Sends the welcome message directly to the chat (no message to reply
+    to) — used for join-request-approved members, who never generate a
+    visible new_chat_members service message."""
+    data = await get_chat_settings(chat.id)
+
+    if not data.get("welcome_enabled", True):
+        return
+
+    welcome_text  = data.get("welcome_text") or "Welcome {MENTION} to <b>{GROUPNAME}</b>."
+    welcome_photo = data.get("welcome_photo")
+    native_markup = _deserialize_markup(data.get("welcome_markup"), ctx.bot)
+
+    await db.upsert_user(user.id, {
+        "first_name": user.first_name or user.full_name,
+        "username":   user.username or "",
+    })
+
+    final_text = format_template(welcome_text, user, chat)
+
+    if native_markup:
+        markup = native_markup
+    else:
+        final_text, markup = parse_buttons(final_text)
+
+    final_text = premium.render(final_text)
+
+    try:
+        if welcome_photo:
+            await ctx.bot.send_photo(
+                chat_id=chat.id,
+                photo=welcome_photo,
+                caption=final_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=markup,
+            )
+        else:
+            await ctx.bot.send_message(
+                chat_id=chat.id,
+                text=final_text,
+                parse_mode=ParseMode.HTML,
+                reply_markup=markup,
+                disable_web_page_preview=True,
+            )
+    except Exception as e:
+        log.warning("Welcome (chat_member path) send failed: %s", e)
+
 async def welcome_member_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg  = update.effective_message
     chat = update.effective_chat
@@ -891,6 +949,9 @@ async def welcome_member_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE)
 
     for user in msg.new_chat_members:
         if user.is_bot:
+            continue
+
+        if _already_welcomed_recently(chat.id, user.id):
             continue
 
         await db.upsert_user(user.id, {
@@ -1003,3 +1064,32 @@ welcome_setup_text_h = MessageHandler(
 
 welcome_member_h  = MessageHandler(filters.StatusUpdate.NEW_CHAT_MEMBERS,  welcome_member_handler)
 goodbye_member_h  = MessageHandler(filters.StatusUpdate.LEFT_CHAT_MEMBER,  goodbye_member_handler)
+
+async def chat_member_join_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """Catches members who join via an approved 'Join via Request' link —
+    Telegram never sends a new_chat_members message for these, only this
+    silent chat_member update."""
+    result: ChatMemberUpdated = update.chat_member
+    if not result:
+        return
+
+    chat = result.chat
+    user = result.new_chat_member.user
+
+    if user.is_bot:
+        return
+
+    old_status = result.old_chat_member.status
+    new_status = result.new_chat_member.status
+
+    if new_status != "member" or old_status in ("member", "administrator", "creator"):
+        return
+
+    if _already_welcomed_recently(chat.id, user.id):
+        return
+
+    await save_group(chat)
+    await _dispatch_welcome(ctx, chat, user)
+
+
+chat_member_join_h = ChatMemberHandler(chat_member_join_handler, ChatMemberHandler.CHAT_MEMBER)
