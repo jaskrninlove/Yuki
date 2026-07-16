@@ -237,6 +237,50 @@ help:
 
     <i>Let Yuki make everyone feel special on their day.</i>
 
+newcmds:
+  page_1: |
+    :sparkle: <b>New Features :dot2: 1/4</b>
+    :gold: <b>Economy</b>
+    <blockquote>
+    :dot2: /daily — Claim your daily coins
+    :dot2: /balance — Check balance & withdrawable
+    :dot2: /pay — Send coins to someone
+    :dot2: /rob — Rob someone (reply)
+    :dot2: /kill — Eliminate someone (reply)
+    :dot2: /shield — Buy protection from kills
+    </blockquote>
+    <i>Chat, rob, and kill your way to riches~</i>
+  page_2: |
+    :sparkle: <b>New Features :dot2: 2/4</b>
+    :ring: <b>Marriage & Social</b>
+    <blockquote>
+    :dot2: /propose — Propose to someone (reply)
+    :dot2: /couple — View your couple profile
+    :dot2: /love — Claim daily love points
+    :dot2: /divorce — End your marriage
+    :dot2: /rep — Give reputation (reply)
+    :dot2: /refer — Get your referral link
+    </blockquote>
+    <i>Find love and grow together~</i>
+  page_3: |
+    :sparkle: <b>New Features :dot2: 3/4</b>
+    :trophy: <b>Games & Rankings</b>
+    <blockquote>
+    :dot2: /gacha — Pull a companion
+    :dot2: /collection — View your companions
+    :dot2: /rankings — Open the Hall of Fame
+    :dot2: /qt — Create a quote sticker (reply)
+    </blockquote>
+    <i>Solve word puzzles in your groups too!</i>
+  page_4: |
+    :sparkle: <b>New Features :dot2: 4/4</b>
+    :gem: <b>Profile & Rewards</b>
+    <blockquote>
+    :dot2: /profile — Your full profile card
+    :dot2: /withdraw — Redeem coins for real rewards
+    </blockquote>
+    <i>Your grind actually pays off here~</i>
+    
 ping:
   response: |
     :ping: <b>Pong!</b>
