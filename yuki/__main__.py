@@ -29,6 +29,7 @@ from yuki.utils.locale import load as load_locale
 from yuki.modules.profile.callbacks import profile_callback
 from yuki.handlers.closebtn import CLOSE_HANDLER
 from yuki.handlers.start import handler as start_h
+from yuki.handlers.newcommands import cmd_handler as newcmds_cmd_h, callback_handler as newcmds_cb_h
 from yuki.handlers.help import cmd_handler as help_cmd_h, callback_handler as help_cb_h
 from yuki.handlers.ping import ping_cmd, ping_cb, health_cmd
 from yuki.handlers.chat import (
@@ -266,6 +267,7 @@ async def post_init(app: Application):
         # ───────── Core ─────────
         BotCommand("start",         "Wake me up 🌸"),
         BotCommand("help",          "Command guide 📖"),
+        BotCommand("newcommands", "See new features ✨"),
         BotCommand("ping",          "Check latency 🏓"),
         BotCommand("health",        "Bot health 💚"),
         BotCommand("withdraw",    "Redeem your points 💸"),
@@ -459,6 +461,8 @@ def build_app() -> Application:
         ping_cmd,
         ping_cb,
         health_cmd,
+        newcmds_cmd_h,
+        newcmds_cb_h,
 
          # =========================
     # Yuki Profile
