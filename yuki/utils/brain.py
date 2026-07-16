@@ -156,21 +156,22 @@ def _smart_fallback(text: str) -> str:
 
 
 # ─────────────────────────────────────────────
-# Groq Client
+# AI Clients — Gemini primary, Groq fallback
 # ─────────────────────────────────────────────
+_groq_client: AsyncOpenAI | None = None
 
-def _get_client() -> AsyncOpenAI | None:
-    global _client
+def _get_groq_client() -> AsyncOpenAI | None:
+    global _groq_client
     if not AI_API_KEY:
         return None
-    if _client is None:
-        _client = AsyncOpenAI(
+    if _groq_client is None:
+        _groq_client = AsyncOpenAI(
             api_key=AI_API_KEY,
             base_url=AI_BASE_URL,
-            timeout=6.0,
+            timeout=5.0,
             max_retries=0,
         )
-    return _client
+    return _groq_client
 
 
 async def get_reply(
@@ -178,12 +179,11 @@ async def get_reply(
     history: list[dict] | None = None,
     user_name: str = "friend",
 ) -> str:
-    """Pure AI reply — Groq first, minimal fallback on failure."""
-    client = _get_client()
+    """Pure Groq AI reply, minimal smart fallback on failure."""
+    client = _get_groq_client()
     if not client:
         return _smart_fallback(user_message)
 
-    # Fresh system prompt each call so emoji vary
     system = _build_system_prompt()
 
     messages = [{"role": "system", "content": system}]
@@ -199,11 +199,13 @@ async def get_reply(
             temperature=0.85,
             stream=False,
         )
-        return resp.choices[0].message.content.strip()
+        text = resp.choices[0].message.content
+        if text and text.strip():
+            return text.strip()
     except Exception as e:
-        log.debug("Groq fallback: %s", e)
-        return _smart_fallback(user_message)
+        log.warning("Groq call failed: %s", e)
 
+    return _smart_fallback(user_message)
 
 # ─────────────────────────────────────────────
 # Sticker Reply — AI powered, not custom
