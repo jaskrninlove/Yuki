@@ -407,10 +407,7 @@ async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not in_dm and not is_reply_to_yuki:
         return  # ignore ambient group stickers entirely
 
-    if not _can_reply(chat.id, user.id):
-        return
-
-    _mark_replied(chat.id, user.id)
+    # Reply-to-Yuki or DM → always respond, bypass cooldown/streak entirely
 
     sticker_id = await get_random_sticker()
     if sticker_id:
