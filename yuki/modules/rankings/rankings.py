@@ -94,6 +94,10 @@ def _group_only_guard(chat) -> bool:
 async def build_today_top(chat_id: int) -> str:
     today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
 
+    total_for_chat = await db.get_db().messages.count_documents({"chat_id": chat_id})
+    today_for_chat = await db.get_db().messages.count_documents({"chat_id": chat_id, "date": {"$gte": today_start}})
+    print(f"[TODAY DEBUG] chat_id={chat_id!r} total_docs={total_for_chat} today_docs={today_for_chat}")
+
     pipeline = [
         {"$match": {"chat_id": chat_id, "date": {"$gte": today_start}}},
         {"$group": {"_id": "$user_id", "count": {"$sum": 1}}},
