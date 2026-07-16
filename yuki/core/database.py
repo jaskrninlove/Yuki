@@ -577,8 +577,8 @@ async def log_message(chat_id: int, user_id: int, text: str = ""):
             "date": datetime.utcnow(),
         })
 
-    except Exception:
-        pass
+    except Exception as e:
+        log.warning("log_message insert failed: %s", e)
 
 
 async def count_messages_today() -> int:
