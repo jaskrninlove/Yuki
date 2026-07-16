@@ -67,8 +67,8 @@ Choose a category below :sparkle:
 # Small helpers
 # ─────────────────────────────────────────────
 
-def _today_key(chat_id: int) -> str:
-    return f"{chat_id}:{datetime.utcnow().strftime('%Y-%m-%d')}"
+def _today_date_str() -> str:
+    return datetime.utcnow().strftime("%Y-%m-%d")
 
 
 def _short_name(name: str, limit: int = 18) -> str:
@@ -404,17 +404,23 @@ async def check_daily_milestones(bot: Bot, chat_id: int, chat_title: str = ""):
             "chat_id": chat_id, "date": {"$gte": today_start},
         })
 
-        key = _today_key(chat_id)
-        last = _milestone_cache.get(key, 0)
+        date_str = datetime.utcnow().strftime("%Y-%m-%d")
 
         for milestone in DAILY_MILESTONES:
-            if last < milestone <= count:
-                _milestone_cache[key] = milestone
-                await premium.send(bot, chat_id, DAILY_MILESTONE_MSGS[milestone], disable_web_page_preview=True)
+            if count < milestone:
                 break
+
+            doc_id = f"{chat_id}:{date_str}:{milestone}"
+
+            try:
+                await db.get_db().milestone_log.insert_one({"_id": doc_id})
+            except Exception:
+                continue  # already sent this milestone for this group today
+
+            await premium.send(bot, chat_id, DAILY_MILESTONE_MSGS[milestone], disable_web_page_preview=True)
+
     except Exception as e:
         log.debug("Milestone check failed: %s", e)
-
 
 # ─────────────────────────────────────────────
 # Handlers
