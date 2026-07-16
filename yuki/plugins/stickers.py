@@ -1,34 +1,27 @@
 """
-Yuki Bot - Safe Sticker Reply System
+Yuki Bot - Safe Sticker Library
 
 Bot does NOT save random group stickers automatically.
 Admin can manually add safe stickers using:
 /addsticker  — reply to sticker
 /stickers    — count saved stickers
 /clearstickers — owner only
+
+Auto-reply logic lives in yuki/handlers/chat.py — this file only
+manages the sticker pool and exposes helpers to fetch from it.
 """
 
 import random
 import logging
 
 from telegram import Update
-from telegram.ext import CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import CommandHandler, ContextTypes
 
 from yuki.core import database as db
 from yuki.core.config import OWNER_ID
 from yuki.utils.helpers import admin_only
 
 log = logging.getLogger("yuki.plugins.stickers")
-
-
-CUTE_TEXTS = [
-    "Hehe cute~",
-    "Aww okayy~",
-    "Yuki likes this.",
-    "That was adorable.",
-    "Bestie energy.",
-    "So cute omg.",
-]
 
 
 async def _stickers_col():
@@ -61,19 +54,6 @@ async def get_random_sticker() -> str | None:
     doc = await col.find_one({}, skip=skip)
 
     return doc.get("file_id") if doc else None
-
-
-async def send_random_sticker(bot, chat_id: int):
-    sticker_id = await get_random_sticker()
-    if not sticker_id:
-        return False
-
-    try:
-        await bot.send_sticker(chat_id=chat_id, sticker=sticker_id)
-        return True
-    except Exception as e:
-        log.debug("Random sticker send failed: %s", e)
-        return False
 
 
 @admin_only
@@ -121,48 +101,6 @@ async def clearstickers_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     await update.effective_message.reply_text("All safe stickers cleared.")
 
 
-async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    msg = update.effective_message
-    user = update.effective_user
-    chat = update.effective_chat
-
-    if not msg or not user or not chat or user.is_bot:
-        return
-
-    try:
-        await db.increment_user_messages(user.id, chat.id)
-        await db.get_db().users.update_one(
-            {"user_id": user.id},
-            {
-                "$inc": {
-                    "stickers_sent": 1,
-                    "xp": 2,
-                    "rank_score": 2,
-                },
-                "$addToSet": {"active_chats": chat.id},
-            },
-            upsert=True,
-        )
-    except Exception:
-        pass
-
-    sticker_id = await get_random_sticker()
-
-    if sticker_id:
-        try:
-            await msg.reply_sticker(sticker=sticker_id)
-            return
-        except Exception as e:
-            log.debug("Reply sticker failed: %s", e)
-
-    try:
-        await msg.reply_text(random.choice(CUTE_TEXTS))
-    except Exception:
-        pass
-
-
 addsticker_handler = CommandHandler("addsticker", addsticker_cmd)
 stickers_count_handler = CommandHandler("stickers", stickers_cmd)
 clearstickers_handler = CommandHandler("clearstickers", clearstickers_cmd)
-
-sticker_handler = MessageHandler(filters.Sticker.ALL, handle_sticker)
