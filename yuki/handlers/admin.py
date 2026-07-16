@@ -80,7 +80,7 @@ async def _announce_maintenance(bot, enabled: bool):
             "Yuki is taking a tiny beauty nap for improvements.\n"
             "Some features may pause for a little while."
             "</blockquote>\n\n"
-            "<i>I’ll be back soon, cuter and smoother than before. :heart:</i>"
+            "<i>I'll be back soon, cuter and smoother than before. :heart:</i>"
         )
     else:
         text = (
@@ -89,7 +89,7 @@ async def _announce_maintenance(bot, enabled: bool):
             "Maintenance is complete and all systems are ready again.\n"
             "Thank you for waiting so patiently."
             "</blockquote>\n\n"
-            "<i>Let’s make the chat alive again. :flower:</i>"
+            "<i>Let's make the chat alive again. :flower:</i>"
         )
 
     users = await db.get_all_users()
@@ -413,10 +413,9 @@ async def resetdata_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         },
     )
 
-    await premium.reply(msg, ":success: This group’s activity/ranking data has been reset.")
+    await premium.reply(msg, ":success: This group's activity/ranking data has been reset.")
 
 
-@owner_only
 async def _broadcast_targets(mode: str):
     users = []
     groups = []
@@ -447,19 +446,40 @@ async def _copy_to(bot, chat_id: int, source_chat_id: int, message_id: int, repl
         await asyncio.sleep(e.retry_after + 1)
         return await _copy_to(bot, chat_id, source_chat_id, message_id, reply_markup)
 
-    except Forbidden:
+    except Forbidden as e:
+        log.debug("Broadcast blocked by user/chat %s: %s", chat_id, e)
         return "blocked"
 
     except BadRequest as e:
         msg_text = str(e).lower()
+        log.warning("Broadcast BadRequest for chat %s: %s", chat_id, e)
+
         if "chat not found" in msg_text or "peer_id_invalid" in msg_text:
             return "deleted"
+
+        # If the reply_markup itself is the problem (e.g. unsupported/mangled
+        # button fields from a premium-styled keyboard), retry once without it
+        # so the content still gets delivered even if buttons can't be copied.
+        if reply_markup is not None:
+            log.warning("Retrying broadcast to %s without reply_markup", chat_id)
+            try:
+                await bot.copy_message(
+                    chat_id=chat_id,
+                    from_chat_id=source_chat_id,
+                    message_id=message_id,
+                )
+                return "ok_no_buttons"
+            except Exception as e2:
+                log.warning("Retry without reply_markup also failed for %s: %s", chat_id, e2)
+
         return "error"
 
-    except TelegramError:
+    except TelegramError as e:
+        log.warning("Broadcast TelegramError for chat %s: %s", chat_id, e)
         return "error"
 
-    except Exception:
+    except Exception as e:
+        log.exception("Broadcast unexpected error for chat %s: %s", chat_id, e)
         return "error"
 
 
@@ -467,10 +487,14 @@ async def _copy_to(bot, chat_id: int, source_chat_id: int, message_id: int, repl
 async def broadcast_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     msg = update.effective_message
 
+    print("[BROADCAST DEBUG] broadcast_cmd triggered")
+
     if not msg:
+        print("[BROADCAST DEBUG] blocked: no msg")
         return
 
     if not msg.reply_to_message:
+        print("[BROADCAST DEBUG] no reply_to_message, sending usage")
         await premium.reply(
             msg,
             ":signal: <b>Broadcast Usage</b>\n\n"
@@ -486,11 +510,18 @@ async def broadcast_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
+    print(f"[BROADCAST DEBUG] replying to message_id={msg.reply_to_message.message_id} "
+          f"has_photo={bool(msg.reply_to_message.photo)} "
+          f"has_markup={msg.reply_to_message.reply_markup is not None}")
+
     mode = "both"
     if ctx.args:
         mode = ctx.args[0].lower()
 
+    print(f"[BROADCAST DEBUG] mode={mode}")
+
     if mode not in ("users", "groups", "both"):
+        print("[BROADCAST DEBUG] invalid mode, aborting")
         await premium.reply(
             msg,
             ":warning: <b>Invalid Mode</b>\n\n"
@@ -500,67 +531,104 @@ async def broadcast_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return
 
     replied = msg.reply_to_message
-    users, groups = await _broadcast_targets(mode)
+
+    try:
+        users, groups = await _broadcast_targets(mode)
+        print(f"[BROADCAST DEBUG] targets resolved: users={len(users)} groups={len(groups)}")
+    except Exception as e:
+        print(f"[BROADCAST DEBUG] _broadcast_targets FAILED: {type(e).__name__}: {e}")
+        log.exception("broadcast_cmd: _broadcast_targets failed")
+        await msg.reply_text(f"⚠️ Failed to resolve broadcast targets: {type(e).__name__}: {e}")
+        return
+
     targets = list(groups) + list(users)
 
     if not targets:
+        print("[BROADCAST DEBUG] no targets found")
         await premium.reply(msg, f":warning: No recipients found for mode <code>{mode}</code>.")
         return
 
-    status = await premium.reply(
-        msg,
-        f":signal: <b>Broadcast In Progress</b>\n\n"
-        f"<blockquote>"
-        f"Mode: <code>{mode}</code>\n"
-        f"Users: <code>{len(users)}</code>\n"
-        f"Groups: <code>{len(groups)}</code>\n"
-        f"Total: <code>{len(targets)}</code>"
-        f"</blockquote>",
-    )
-
-    stats = {"ok": 0, "blocked": 0, "deleted": 0, "error": 0}
-
-    for index, chat_id in enumerate(targets, start=1):
-        result = await _copy_to(
-            ctx.bot, chat_id, replied.chat_id, replied.message_id, replied.reply_markup
-        )
-        stats[result] += 1
-
-        if index % 25 == 0 or index == len(targets):
-            failed = stats["blocked"] + stats["deleted"] + stats["error"]
-            try:
-                await status.edit_text(
-                    premium.render(
-                        f":signal: <b>Broadcast In Progress</b>\n\n"
-                        f"<blockquote>"
-                        f"Progress: <code>{index}/{len(targets)}</code>\n"
-                        f"Delivered: <code>{stats['ok']}</code>\n"
-                        f"Failed: <code>{failed}</code>"
-                        f"</blockquote>"
-                    ),
-                    parse_mode="HTML",
-                )
-            except Exception:
-                pass
-
-        await asyncio.sleep(0.05)
-
-    failed = stats["blocked"] + stats["deleted"] + stats["error"]
-
-    await status.edit_text(
-        premium.render(
-            f":success: <b>Broadcast Completed</b>\n\n"
+    try:
+        status = await premium.reply(
+            msg,
+            f":signal: <b>Broadcast In Progress</b>\n\n"
             f"<blockquote>"
             f"Mode: <code>{mode}</code>\n"
-            f"Total Targets: <code>{len(targets)}</code>\n\n"
-            f"Delivered: <code>{stats['ok']}</code>\n"
-            f"Blocked Bot: <code>{stats['blocked']}</code>\n"
-            f"Deleted/Invalid: <code>{stats['deleted']}</code>\n"
-            f"Other Errors: <code>{stats['error']}</code>"
-            f"</blockquote>"
-        ),
-        parse_mode="HTML",
-    )
+            f"Users: <code>{len(users)}</code>\n"
+            f"Groups: <code>{len(groups)}</code>\n"
+            f"Total: <code>{len(targets)}</code>"
+            f"</blockquote>",
+        )
+        print(f"[BROADCAST DEBUG] status message sent: {status!r}")
+    except Exception as e:
+        print(f"[BROADCAST DEBUG] sending initial status message FAILED: {type(e).__name__}: {e}")
+        log.exception("broadcast_cmd: initial status send failed")
+        await msg.reply_text(f"⚠️ Failed to send broadcast status message: {type(e).__name__}: {e}")
+        return
+
+    stats = {"ok": 0, "ok_no_buttons": 0, "blocked": 0, "deleted": 0, "error": 0}
+
+    try:
+        for index, chat_id in enumerate(targets, start=1):
+            result = await _copy_to(
+                ctx.bot, chat_id, replied.chat_id, replied.message_id, replied.reply_markup
+            )
+            print(f"[BROADCAST DEBUG] target {index}/{len(targets)} chat_id={chat_id} result={result}")
+            stats[result] += 1
+
+            if index % 25 == 0 or index == len(targets):
+                delivered = stats["ok"] + stats["ok_no_buttons"]
+                failed = stats["blocked"] + stats["deleted"] + stats["error"]
+                try:
+                    await status.edit_text(
+                        premium.render(
+                            f":signal: <b>Broadcast In Progress</b>\n\n"
+                            f"<blockquote>"
+                            f"Progress: <code>{index}/{len(targets)}</code>\n"
+                            f"Delivered: <code>{delivered}</code>\n"
+                            f"Failed: <code>{failed}</code>"
+                            f"</blockquote>"
+                        ),
+                        parse_mode="HTML",
+                    )
+                except Exception as e:
+                    print(f"[BROADCAST DEBUG] progress edit failed: {type(e).__name__}: {e}")
+
+            await asyncio.sleep(0.05)
+
+    except Exception:
+        print("[BROADCAST DEBUG] CRASHED mid-loop, see traceback below")
+        log.exception("broadcast_cmd: unexpected crash mid-broadcast")
+        await msg.reply_text(
+            "⚠️ Broadcast crashed unexpectedly partway through — check terminal logs for the traceback."
+        )
+        return
+
+    print(f"[BROADCAST DEBUG] loop finished, stats={stats}")
+
+    delivered = stats["ok"] + stats["ok_no_buttons"]
+    failed = stats["blocked"] + stats["deleted"] + stats["error"]
+
+    try:
+        await status.edit_text(
+            premium.render(
+                f":success: <b>Broadcast Completed</b>\n\n"
+                f"<blockquote>"
+                f"Mode: <code>{mode}</code>\n"
+                f"Total Targets: <code>{len(targets)}</code>\n\n"
+                f"Delivered: <code>{delivered}</code>\n"
+                f"Delivered w/o buttons: <code>{stats['ok_no_buttons']}</code>\n"
+                f"Blocked Bot: <code>{stats['blocked']}</code>\n"
+                f"Deleted/Invalid: <code>{stats['deleted']}</code>\n"
+                f"Other Errors: <code>{stats['error']}</code>"
+                f"</blockquote>"
+            ),
+            parse_mode="HTML",
+        )
+        print("[BROADCAST DEBUG] final summary edit succeeded")
+    except Exception as e:
+        print(f"[BROADCAST DEBUG] final summary edit FAILED: {type(e).__name__}: {e}")
+        log.exception("broadcast_cmd: final summary edit failed")
     
 @owner_only
 async def maintenance_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
