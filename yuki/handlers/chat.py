@@ -334,10 +334,10 @@ async def handle_voice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     """
     Sticker handler.
-    - Age guard: ignores all stickers sent before bot started (kills reconnect spam)
-    - Admin guard: only works when Yuki is admin
-    - Heavy cooldown: max 1 reply per 3 minutes per chat
-    - Only replies to stickers in DM or when mentioned/replied-to
+    - Age guard: ignores stickers sent before bot started
+    - Admin guard: only works when Yuki is admin (groups)
+    - Only replies when: DM, OR the sticker is a direct reply to Yuki's own message
+    - Never reacts to random/ambient stickers in a group
     """
     msg  = update.effective_message
     user = update.effective_user
@@ -346,27 +346,28 @@ async def handle_sticker(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not msg or not user or not chat or user.is_bot:
         return
 
-    # ── AGE GUARD: this kills the reconnect/promote spam ──
     if _is_old(msg):
         return
 
-    # ── ADMIN GUARD ──
     if chat.type != "private" and not await _is_admin(ctx.bot, chat.id):
         return
 
     asyncio.get_event_loop().create_task(_track_activity(user, chat, "sticker"))
 
-    # Only reply to stickers in DMs, or if cooldown allows in groups
     in_dm = chat.type == "private"
+    is_reply_to_yuki = (
+        msg.reply_to_message
+        and msg.reply_to_message.from_user
+        and msg.reply_to_message.from_user.id == _bot_id
+    )
 
-    if not in_dm and not _can_sticker_reply(chat.id):
-        return
+    if not in_dm and not is_reply_to_yuki:
+        return  # ignore ambient group stickers entirely
 
-    if not in_dm and not _can_reply(chat.id, user.id):
+    if not _can_reply(chat.id, user.id):
         return
 
     _mark_replied(chat.id, user.id)
-    _mark_sticker(chat.id)
 
     emoji = getattr(msg.sticker, "emoji", "") or ""
 
