@@ -134,8 +134,6 @@ from yuki.plugins.welcome import (
     goodbye_toggle_handler,
     welcome_member_h,
     goodbye_member_h,
-    welcome_callback_h,
-    welcome_setup_text_h,
     chat_member_join_h,  
 )
 from yuki.modules.marriage.propose import PROPOSE, PROPOSE_CB
@@ -587,8 +585,6 @@ def build_app() -> Application:
         goodbye_toggle_handler,
         welcome_member_h,
         goodbye_member_h,
-        welcome_callback_h,
-        welcome_setup_text_h,
         chat_member_join_h,   # <-- add karo
 
         whisper_inline_handler,
