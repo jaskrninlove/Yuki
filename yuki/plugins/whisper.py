@@ -92,7 +92,7 @@ async def whisper_inline(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     })
 
     public_text = premium.render(
-        f"A whisper message to @{html.escape(target_username)}. Only they can read the message.:kiss:"
+        f"A whisper message to @{html.escape(target_username)}. Only they can read the message.:pinkheart:"
     )
 
     keyboard = InlineKeyboardMarkup([
@@ -101,7 +101,7 @@ async def whisper_inline(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 "Read content",
                 callback_data=f"whisper:{wid}",
                 style="primary",
-                icon=icon("search"),
+                icon=icon("key"),
             )
         ],
         [
@@ -109,7 +109,7 @@ async def whisper_inline(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 "Open in Private",
                 url=f"https://t.me/{BOT_USERNAME}?start=whisper_{wid}",
                 style="success",
-                icon=icon("private"),
+                icon=icon("skull"),
             )
         ],
     ])
