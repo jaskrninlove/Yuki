@@ -19,7 +19,7 @@ from telegram import (
 from telegram.ext import InlineQueryHandler, CallbackQueryHandler, ContextTypes
 
 from yuki.core import database as db
-from yuki.utils.keyboards import pbtn, icon
+from yuki.utils.keyboards import BOT_USERNAME, pbtn, icon
 from yuki.utils import premium
 
 log = logging.getLogger("yuki.plugins.whisper")
@@ -92,10 +92,7 @@ async def whisper_inline(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     })
 
     public_text = premium.render(
-        f":settings: <b>Whisper for @{html.escape(target_username)}</b>\n\n"
-        "<blockquote>"
-        "Only they can read the content."
-        "</blockquote>"
+        f"A whisper message to @{html.escape(target_username)}. Only they can read the message.:kiss:"
     )
 
     keyboard = InlineKeyboardMarkup([
@@ -106,7 +103,15 @@ async def whisper_inline(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 style="primary",
                 icon=icon("search"),
             )
-        ]
+        ],
+        [
+            pbtn(
+                "Open in Private",
+                url=f"https://t.me/{BOT_USERNAME}?start=whisper_{wid}",
+                style="success",
+                icon=icon("private"),
+            )
+        ],
     ])
 
     result = InlineQueryResultArticle(

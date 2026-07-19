@@ -632,7 +632,7 @@ def build_app() -> Application:
     app.add_handler(voice_handler,   group=2)
     app.add_handler(NEW_GRID, group=0)
     app.add_handler(WORDGRID_REFRESH_CB, group=0)
-    app.add_handler(WORDGRID_GUESS_HANDLER, group=2)  # BEFORE text_handler in the list
+    app.add_handler(WORDGRID_GUESS_HANDLER, group=3) # BEFORE text_handler in the list
     # app.add_handler(WORD_ANSWER_HANDLER, group=2)
     app.add_handler(text_handler,    group=2)
     app.add_handler(XP_HANDLER, group=10)
