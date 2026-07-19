@@ -143,7 +143,7 @@ from yuki.modules.marriage.divorce import DIVORCE, DIVORCE_CB
 from yuki.plugins.tagall import tag_handler, yukitag_handler, yukistop_handler, shutdown_telethon
 from yuki.plugins.quote import qt_handler, quote_handler
 from yuki.plugins.revival import register_revival_job
-# from yuki.plugins.whisper import whisper_inline_handler, whisper_read_handler
+from yuki.plugins.whisper import whisper_inline_handler, whisper_read_handler
 from yuki.plugins.afk import afk_handler, back_handler, afk_watch_h
 from yuki.plugins.premium_debug import emojiid_handler
 from yuki.handlers.group_events import group_event_handler
@@ -624,6 +624,8 @@ def build_app() -> Application:
     app.add_handler(afk_watch_h,      group=1)
     # app.add_handler(WORD_ANSWER_HANDLER, group=2)
     app.add_handler(auto_save_handler, group=1)  # fallback group saver
+    app.add_handler(whisper_inline_handler)
+    app.add_handler(whisper_read_handler)
 
     # ── Group 2: chat catch-all (always last) ─────────────────────────────────
     app.add_handler(sticker_handler, group=2)
