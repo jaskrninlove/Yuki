@@ -37,6 +37,11 @@ def _load():
     _loaded = True
 
 
+def get_all_words() -> list[str]:
+    _load()
+    return _word_cache
+
+
 def random_word() -> str | None:
     _load()
     if not _word_cache:

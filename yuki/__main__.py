@@ -143,7 +143,7 @@ from yuki.modules.marriage.divorce import DIVORCE, DIVORCE_CB
 from yuki.plugins.tagall import tag_handler, yukitag_handler, yukistop_handler, shutdown_telethon
 from yuki.plugins.quote import qt_handler, quote_handler
 from yuki.plugins.revival import register_revival_job
-from yuki.plugins.whisper import whisper_inline_handler, whisper_read_handler
+# from yuki.plugins.whisper import whisper_inline_handler, whisper_read_handler
 from yuki.plugins.afk import afk_handler, back_handler, afk_watch_h
 from yuki.plugins.premium_debug import emojiid_handler
 from yuki.handlers.group_events import group_event_handler
@@ -216,11 +216,13 @@ from yuki.modules.economy.balance import BALANCE
 from yuki.modules.economy.daily import DAILY
 from yuki.modules.economy.pay import PAY
 
+from yuki.plugins.translate import TRANSLATE_CMD
+from yuki.games.wordgrid.game import NEW_GRID, WORDGRID_GUESS_HANDLER, WORDGRID_REFRESH_CB
+
 # =========================
 # Social
 # =========================
 from yuki.modules.social.rep import REP
-
 from yuki.plugins.birthday import (
     bday_h,
     mybirthday_h,
@@ -363,6 +365,8 @@ async def post_init(app: Application):
         BotCommand("afk",           "Go AFK 😴"),
         BotCommand("back",          "I'm back 👋"),
 
+        BotCommand("tr", "Translate a message 🌐"),
+
         # ───────── Group Setup ─────────
         BotCommand("setwelcome",    "Set welcome 👋"),
         BotCommand("welcome",       "Toggle welcome 🌸"),
@@ -496,6 +500,7 @@ def build_app() -> Application:
         COLLECTION_CARD_CB,
         COLLECTION_BACK_CB,
         TESTWORD_CMD,
+        TRANSLATE_CMD,
     # =========================
     # Social
     # =========================
@@ -587,8 +592,8 @@ def build_app() -> Application:
         goodbye_member_h,
         chat_member_join_h,   # <-- add karo
 
-        whisper_inline_handler,
-        whisper_read_handler,
+        # whisper_inline_handler,
+        # whisper_read_handler,
 
         afk_handler,
         back_handler,
@@ -625,6 +630,9 @@ def build_app() -> Application:
     app.add_handler(photo_handler,   group=2)
     app.add_handler(video_handler,   group=2)
     app.add_handler(voice_handler,   group=2)
+    app.add_handler(NEW_GRID, group=0)
+    app.add_handler(WORDGRID_REFRESH_CB, group=0)
+    app.add_handler(WORDGRID_GUESS_HANDLER, group=2)  # BEFORE text_handler in the list
     # app.add_handler(WORD_ANSWER_HANDLER, group=2)
     app.add_handler(text_handler,    group=2)
     app.add_handler(XP_HANDLER, group=10)
@@ -689,6 +697,7 @@ def main():
                 "message",
                 "callback_query",
                 "inline_query",
+                "chosen_inline_result",
                 "my_chat_member",   # ← REQUIRED for bot_added_handler to fire
                 "chat_member",
             ],
