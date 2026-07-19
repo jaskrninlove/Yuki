@@ -273,6 +273,8 @@ newcmds:
     <blockquote>
     :dot2: /gacha — Pull a companion
     :dot2: /collection — View your companions
+    :dot2: /newgrid — Play Word Grid (find hidden words!)
+    :dot2: /wordgridrankings — Word Grid leaderboard
     :dot2: /rankings — Open the Hall of Fame
     :dot2: /qt — Create a quote sticker (reply)
 

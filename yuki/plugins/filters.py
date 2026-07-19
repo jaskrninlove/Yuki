@@ -63,19 +63,19 @@ async def filter_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         if reply.sticker:
             data = {"type": "sticker", "file_id": reply.sticker.file_id}
         elif reply.photo:
-            data = {"type": "photo", "file_id": reply.photo[-1].file_id, "caption": reply.caption or ""}
+            data = {"type": "photo", "file_id": reply.photo[-1].file_id, "caption": reply.caption_html or reply.caption or ""}
         elif reply.video:
-            data = {"type": "video", "file_id": reply.video.file_id, "caption": reply.caption or ""}
+            data = {"type": "video", "file_id": reply.video.file_id, "caption": reply.caption_html or reply.caption or ""}
         elif reply.animation:
-            data = {"type": "animation", "file_id": reply.animation.file_id, "caption": reply.caption or ""}
+            data = {"type": "animation", "file_id": reply.animation.file_id, "caption": reply.caption_html or reply.caption or ""}
         elif reply.document:
-            data = {"type": "document", "file_id": reply.document.file_id, "caption": reply.caption or ""}
+            data = {"type": "document", "file_id": reply.document.file_id, "caption": reply.caption_html or reply.caption or ""}
         elif reply.audio:
-            data = {"type": "audio", "file_id": reply.audio.file_id, "caption": reply.caption or ""}
+            data = {"type": "audio", "file_id": reply.audio.file_id, "caption": reply.caption_html or reply.caption or ""}
         elif reply.voice:
             data = {"type": "voice", "file_id": reply.voice.file_id}
         elif reply.text:
-            data = {"type": "text", "text": reply.text}
+            data = {"type": "text", "text": reply.text_html or reply.text}
         else:
             await msg.reply_text("Unsupported replied message type.")
             return

@@ -346,12 +346,16 @@ async def _safe_send(bot, chat_id: int, text: str, max_retries: int = 6) -> bool
 # Helpers
 # ─────────────────────────────────────────────
 
-def extract_message(text: str) -> str:
-    text  = (text or "").strip()
+# CHANGED: now takes the Message object (not raw text) so we can pull the
+# HTML-rendered version and preserve bold/italic/premium-emoji formatting.
+def extract_message(msg) -> str:
+    text = (msg.text or msg.caption or "").strip()
+    html_text = (msg.text_html or msg.caption_html or text).strip()
     lower = text.lower()
+
     for prefix in ("@all", "@tagall", "@yukitag", "/yukitag"):
         if lower.startswith(prefix):
-            return text[len(prefix):].strip() or ""
+            return html_text[len(prefix):].strip()
     return ""
 
 
@@ -411,7 +415,8 @@ async def tagall_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    custom_msg = extract_message(msg.text or msg.caption or "")
+    # CHANGED: pass the whole message object, not raw text
+    custom_msg = extract_message(msg)
 
     client = await get_telethon()
     if not client:
@@ -434,10 +439,8 @@ async def tagall_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML",
     )
 
-    # Mark active so fetch can check stop signal
     _ACTIVE_TAGS[chat.id] = True
 
-    # Status callback to update fetch progress
     async def update_status(text: str):
         try:
             await status.edit_text(
@@ -461,7 +464,6 @@ async def tagall_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Check if stopped during fetch
     if not _ACTIVE_TAGS.get(chat.id):
         await status.edit_text(
             f"{_rand(_HEART_IDS, '💗')} <b>Stopped during member collection.</b>",
@@ -481,7 +483,6 @@ async def tagall_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
 
-    # Copy replied message if any
     if msg.reply_to_message:
         try:
             await msg.reply_to_message.copy(chat.id)
@@ -507,9 +508,11 @@ async def tagall_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             emoji = _pick()
 
             if custom_msg:
+                # CHANGED: custom_msg is already safe HTML (from text_html),
+                # do not html.escape() it again or the tags/premium emoji break.
                 text = (
                     f'{emoji} <a href="tg://user?id={user.id}">{name}</a>\n'
-                    f"{html.escape(custom_msg)}"
+                    f"{custom_msg}"
                 )
             else:
                 text = f'{emoji} <a href="tg://user?id={user.id}">{name}</a>'
@@ -525,7 +528,6 @@ async def tagall_handler(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         else:
             failed += 1
 
-        # Progress every 50
         if sent > 0 and sent % 50 == 0:
             try:
                 await status.edit_text(

@@ -767,3 +767,18 @@ def collection_card_keyboard(page: int) -> Markup:
             pbtn("Close", callback_data="close", style="danger", icon="close"),
         ]
     ])
+
+def wordgrid_rankings_keyboard() -> Markup:
+    return Markup([
+        [
+            pbtn(" Group", callback_data="wgrank_group", style="primary", icon="chat"),
+            pbtn(" Global", callback_data="wgrank_global", style="success", icon="signal"),
+        ],
+        [
+            pbtn(" Today", callback_data="wgrank_today", style="primary", icon="calendar"),
+            pbtn(" My Points", callback_data="wgrank_me", style="danger", icon="star"),
+        ],
+        [
+            pbtn(" Close", callback_data="close", style="danger", icon="warning"),
+        ],
+    ])

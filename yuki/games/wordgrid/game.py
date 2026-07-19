@@ -191,9 +191,11 @@ async def _wordgrid_guess_listener_inner(update: Update, ctx: ContextTypes.DEFAU
     points = game.points_for(guess)
     score_entry = game.scores.setdefault(user.id, {"name": user.full_name, "points": 0})
     score_entry["points"] += points
+    from yuki.database.wordgrid_stats import log_points
+    log_points(user.id, chat.id, user.full_name, points)
 
     grid_link = f"https://t.me/c/{str(chat.id)[4:]}/{game.message_id}" if str(chat.id).startswith("-100") else None
-
+     
     kb = None
     if grid_link:
         kb = InlineKeyboardMarkup(

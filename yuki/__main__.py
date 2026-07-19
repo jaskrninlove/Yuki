@@ -32,6 +32,7 @@ from yuki.handlers.start import handler as start_h
 from yuki.handlers.newcommands import cmd_handler as newcmds_cmd_h, callback_handler as newcmds_cb_h
 from yuki.handlers.help import cmd_handler as help_cmd_h, callback_handler as help_cb_h
 from yuki.handlers.ping import ping_cmd, ping_cb, health_cmd
+from yuki.games.wordgrid.rankings import WORDGRID_RANKINGS_CMD, WORDGRID_RANKINGS_CB
 from yuki.handlers.chat import (
     text_handler,
     photo_handler,
@@ -208,7 +209,6 @@ from yuki.plugins.post import (
 # =========================
 from yuki.modules.profile.profile import PROFILE
 from yuki.modules.profile.xp_listener import XP_HANDLER
-
 # =========================
 # Economy
 # =========================
@@ -296,6 +296,9 @@ async def post_init(app: Application):
         BotCommand("gacha",       "Pull a companion 🎴"),
         BotCommand("collection",  "View your collection 📖"),
 
+        BotCommand("newgrid",           "Start a Word Grid game 🧩"),
+        BotCommand("wordgridrankings",  "Word Grid leaderboard 🏆"),
+        
         # ───────── Gifts ─────────
         BotCommand("gift",          "Send a gift 🎁"),
         BotCommand("mygift",        "Your gift box 🎀"),
@@ -501,6 +504,8 @@ def build_app() -> Application:
         COLLECTION_BACK_CB,
         TESTWORD_CMD,
         TRANSLATE_CMD,
+        WORDGRID_RANKINGS_CMD,
+        WORDGRID_RANKINGS_CB,
     # =========================
     # Social
     # =========================
