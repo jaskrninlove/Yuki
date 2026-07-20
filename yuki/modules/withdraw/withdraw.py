@@ -15,6 +15,7 @@ from telegram.ext import (
 from yuki.core import config
 from yuki.database.economy import get as get_economy, remove_withdraw
 from yuki.database.withdrawals import (
+    REWARD_TIERS,
     eligible_tiers,
     create_request,
     get_request,
@@ -22,12 +23,22 @@ from yuki.database.withdrawals import (
     has_pending_request,
 )
 from yuki.utils.premium import reply, edit, send
-from yuki.utils.keyboards import withdraw_tiers_keyboard, withdraw_admin_keyboard
+from yuki.utils.keyboards import withdraw_tiers_keyboard, withdraw_admin_keyboard, withdraw_info_keyboard
 from yuki.utils.helpers import full_name, mention_html
 
 
+def _build_ladder_text(balance: int) -> str:
+    lines = []
+    for cost, label in REWARD_TIERS:
+        if balance >= cost:
+            lines.append(f":unlocked: <code>{cost:,}</code> pts — <b>{label}</b>")
+        else:
+            lines.append(f":locked: <code>{cost:,}</code> pts — <b>{label}</b>")
+    return "\n".join(lines)
+
+
 # ==========================================================
-# /withdraw
+# /withdraw — info card
 # ==========================================================
 
 async def withdraw_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -37,39 +48,111 @@ async def withdraw_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private":
         return await reply(message, ":warning: Please use /withdraw in my DM~")
 
-    if has_pending_request(user.id):
-        return await reply(
-            message,
-            ":clock: You already have a pending withdrawal request. Please wait for it to be resolved~",
-        )
-
     eco = get_economy(user.id)
     balance = eco.get("withdraw_balance", 0)
-
-    tiers = eligible_tiers(balance)
-
-    if not tiers:
-        return await reply(
-            message,
-            f"""
-:warning: <b>Not Enough Points</b>
-
-Your withdrawable balance: <code>{balance:,}</code> pts
-
-Keep earning through daily streaks, kills, robs, and referrals!
-""",
-        )
 
     await reply(
         message,
         f"""
-:gem: <b>Withdraw Rewards</b>
+:gem: <b>Withdraw Center</b>
 
 Your withdrawable balance: <code>{balance:,}</code> pts
 
-Choose a reward tier below~
+<blockquote>
+Earn withdrawable points through daily streaks, kills, robs,
+referrals, marriage milestones, and Word Grid wins~
+
+Redeem them below for real rewards!
+</blockquote>
+
+<b>Reward Ladder</b>
+{_build_ladder_text(balance)}
+
+<i>Unlocked tiers are ready to redeem — keep earning to unlock more!</i>
+""",
+        reply_markup=withdraw_info_keyboard(),
+    )
+
+
+# ==========================================================
+# "Withdraw" button — show eligible tiers, same message
+# ==========================================================
+
+async def withdraw_open_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    await query.answer()
+
+    if has_pending_request(user.id):
+        await edit(
+            query,
+            ":clock: <b>You already have a pending request</b>\n\n"
+            "Please wait for it to be resolved before starting a new one~",
+            reply_markup=withdraw_info_keyboard(),
+        )
+        return
+
+    eco = get_economy(user.id)
+    balance = eco.get("withdraw_balance", 0)
+    tiers = eligible_tiers(balance)
+
+    if not tiers:
+        await edit(
+            query,
+            f"""
+:warning: <b>Not Enough Points Yet</b>
+
+Your withdrawable balance: <code>{balance:,}</code> pts
+
+<blockquote>{_build_ladder_text(balance)}</blockquote>
+
+Keep earning through daily streaks, kills, robs, referrals, and Word Grid!
+""",
+            reply_markup=withdraw_info_keyboard(),
+        )
+        return
+
+    await edit(
+        query,
+        f"""
+:gem: <b>Choose Your Reward</b>
+
+Your withdrawable balance: <code>{balance:,}</code> pts
+
+Pick a tier below to redeem~
 """,
         reply_markup=withdraw_tiers_keyboard(tiers),
+    )
+
+
+async def withdraw_back_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user = update.effective_user
+    await query.answer()
+
+    eco = get_economy(user.id)
+    balance = eco.get("withdraw_balance", 0)
+
+    await edit(
+        query,
+        f"""
+:gem: <b>Withdraw Center</b>
+
+Your withdrawable balance: <code>{balance:,}</code> pts
+
+<blockquote>
+Earn withdrawable points through daily streaks, kills, robs,
+referrals, marriage milestones, and Word Grid wins~
+
+Redeem them below for real rewards!
+</blockquote>
+
+<b>Reward Ladder</b>
+{_build_ladder_text(balance)}
+
+<i>Unlocked tiers are ready to redeem — keep earning to unlock more!</i>
+""",
+        reply_markup=withdraw_info_keyboard(),
     )
 
 
@@ -84,7 +167,7 @@ async def withdraw_tier_pick(update: Update, context: ContextTypes.DEFAULT_TYPE)
     balance = eco.get("withdraw_balance", 0)
 
     if balance < cost:
-        await edit(query, ":warning: Your balance changed, this tier is no longer available~", reply_markup=None)
+        await edit(query, ":warning: Your balance changed, this tier is no longer available~", reply_markup=withdraw_info_keyboard())
         return
 
     context.user_data["withdraw_pending_cost"] = cost
@@ -104,7 +187,7 @@ async def withdraw_contact_capture(update: Update, context: ContextTypes.DEFAULT
 
     cost = context.user_data.get("withdraw_pending_cost")
     if not cost:
-        return  # not in a withdraw flow, let other handlers process this message
+        return
 
     if not message.reply_to_message or "Reply with your UPI ID" not in (message.reply_to_message.text or ""):
         return
@@ -118,7 +201,6 @@ async def withdraw_contact_capture(update: Update, context: ContextTypes.DEFAULT
         await reply(message, ":warning: Your balance changed, this tier is no longer available~")
         return
 
-    from yuki.database.withdrawals import REWARD_TIERS
     label = next((l for c, l in REWARD_TIERS if c == cost), "Reward")
 
     contact = message.text.strip()[:200]
@@ -245,6 +327,8 @@ Contact support if you believe this is a mistake.
 # ==========================================================
 
 WITHDRAW = CommandHandler("withdraw", withdraw_cmd)
+WITHDRAW_OPEN_CB = CallbackQueryHandler(withdraw_open_callback, pattern=r"^wd_open$")
+WITHDRAW_BACK_CB = CallbackQueryHandler(withdraw_back_callback, pattern=r"^wd_back$")
 WITHDRAW_TIER_CB = CallbackQueryHandler(withdraw_tier_pick, pattern=r"^wd_pick:\d+$")
 WITHDRAW_CONTACT_CAPTURE = MessageHandler(
     filters.TEXT & filters.REPLY & filters.ChatType.PRIVATE & ~filters.COMMAND,

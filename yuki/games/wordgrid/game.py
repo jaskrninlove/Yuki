@@ -25,7 +25,7 @@ GRID_SIZE = 8
 LENGTH_TARGETS = [3, 3, 3, 4, 4, 5, 5, 6, 6, 6]
 
 WIN_BALANCE = {1: 500, 2: 350, 3: 200}
-WIN_WITHDRAW = {1: 10, 2: 7, 3: 5}
+WIN_WITHDRAW = {1: 7, 2: 5, 3: 3}
 
 # ── FIX 1: dedicated word pool for the grid (needs 3-letter words too,
 # unlike the scramble game's word_list.py which excludes them on purpose) ──
@@ -255,7 +255,7 @@ async def _finish_round(ctx: ContextTypes.DEFAULT_TYPE, game: GridGame):
     medal_icons = [":gold:", ":silver:", ":bronze:"]
 
     for i, (uid, data) in enumerate(ranking):
-        medal = medal_icons[i] if i < 3 else f":onlyb: {i + 1}."
+        medal = medal_icons[i] if i < 3 else ":onlyb:"
         line = f"{medal} <b>{data['name']}</b> — <code>{data['points']}</code> pts"
 
         if i < 3:

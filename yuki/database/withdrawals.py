@@ -15,10 +15,11 @@ withdrawals: Collection = DB.withdrawals
 counters: Collection = DB.counters
 
 REWARD_TIERS = [
-    (1000, "₹10 Cash"),
-    (5000, "Telegram Username (ID)"),
-    (10000, "₹100 Cash"),
-    (20000, "Telegram Premium"),
+    (1000, "₹20 Cash"),
+    (3500, "Telegram Username (ID)"),
+    (6000, "Netflix Premium"),
+    (10000, "1 Month Telegram Premium"),
+    (50000, "Telegram Premium + Netflix Premium"),
 ]
 
 

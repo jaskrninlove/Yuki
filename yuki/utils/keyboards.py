@@ -697,9 +697,17 @@ def withdraw_tiers_keyboard(tiers: list) -> Markup:
         rows.append([
             pbtn(f" {label} — {cost:,} pts", callback_data=f"wd_pick:{cost}", style="primary", icon="gold"),
         ])
-    rows.append([pbtn(" Cancel", callback_data="cancel", style="danger", icon="no")])
+    rows.append([
+        pbtn(" Back", callback_data="wd_back", style="primary", icon="back"),
+        pbtn(" Cancel", callback_data="cancel", style="danger", icon="no"),
+    ])
     return Markup(rows)
 
+def withdraw_info_keyboard() -> Markup:
+    return Markup([
+        [pbtn(" Withdraw", callback_data="wd_open", style="success", icon="gold")],
+        [pbtn(" Owner", callback_data="owner", style="primary", icon="owner")],
+    ])
 
 def withdraw_admin_keyboard(req_id: int) -> Markup:
     return Markup([

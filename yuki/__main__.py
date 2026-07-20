@@ -182,6 +182,8 @@ from yuki.modules.wordgame.game import (
 
 from yuki.modules.withdraw.withdraw import (
     WITHDRAW,
+    WITHDRAW_OPEN_CB,
+    WITHDRAW_BACK_CB,
     WITHDRAW_TIER_CB,
     WITHDRAW_CONTACT_CAPTURE,
     WITHDRAW_ADMIN_CB,
@@ -493,6 +495,8 @@ def build_app() -> Application:
         DIVORCE_CB,
         REFER,
         WITHDRAW,
+        WITHDRAW_OPEN_CB,
+        WITHDRAW_BACK_CB,
         WITHDRAW_TIER_CB,
         WITHDRAW_CONTACT_CAPTURE,
         WITHDRAW_ADMIN_CB,
