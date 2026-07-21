@@ -25,6 +25,7 @@ from yuki.database.economy import (
     dead_remaining,
 )
 
+from yuki.utils import premium
 from yuki.utils.premium import reply
 from yuki.utils.rewards import (
     kill_reward,
@@ -128,17 +129,28 @@ Your attack failed~
 
     set_dead(target.id, datetime.now(timezone.utc) + timedelta(seconds=DEATH_PROTECTION))
 
+    kills_before = get_kills(sender.id)
     add_kill(sender.id)
     kills = get_kills(sender.id)
 
     from yuki.database.achievements import check_kill_milestones
     check_kill_milestones(sender.id, kills)
 
-    bonus = kill_milestone_bonus(kills)
+    bonus = kill_milestone_bonus(kills_before, kills)
     bonus_text = ""
     if bonus:
         add_withdraw(sender.id, bonus)
         bonus_text = f"\n\n:gift: <b>Milestone Reached!</b>\n<code>+${bonus}</code> added to your withdrawable balance~"
+
+        from yuki.utils.helpers import mention_html
+        try:
+            await premium.send(
+                context.bot,
+                sender.id,
+                f":tada: <b>Kill Milestone!</b>\n\n{mention_html(sender)}, you've hit <code>{kills}</code> kills!\n:gift: <code>+${bonus}</code> added to your withdrawable balance~",
+            )
+        except Exception:
+            pass
 
     await reply(
         message,
