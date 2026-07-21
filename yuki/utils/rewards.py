@@ -14,11 +14,11 @@ import random
 # Daily
 # ==========================================================
 
-DAILY_MIN = 10
-DAILY_MAX = 50
+DAILY_MIN = 30
+DAILY_MAX = 300
 GACHA_COMPLETION_REWARD = 100  # withdraw_balance, one-time, for unlocking all companions
-WEEKLY_STREAK_BONUS = 2      # withdraw_balance, on every 7th day
-MONTHLY_STREAK_BONUS = 10    # withdraw_balance, on every 30th day
+WEEKLY_STREAK_BONUS = 50   # withdraw_balance, on every 7th day
+MONTHLY_STREAK_BONUS = 100    # withdraw_balance, on every 30th day
 
 
 def daily_reward() -> int:
@@ -92,11 +92,11 @@ def crime():
 # ==========================================================
 
 ROB_SUCCESS = 0.45
-ROB_COOLDOWN = 20 * 60           # 20 minutes          # 3 hours
+ROB_COOLDOWN = 20 * 60           # 20 minutes
 ROB_MIN_TARGET_BALANCE = 50      # target must have at least this much
 ROB_FAIL_FINE = (20, 60)
-ROB_MILESTONE_STEP = 10_000      # every 10k total robbed
-ROB_MILESTONE_REWARD = 3         # withdraw_balance bonus per step
+ROB_MILESTONE_STEP = 2_000       # every 5k total robbed
+ROB_MILESTONE_REWARD = 25        # withdraw_balance bonus per step
 
 
 def rob(maximum: int):
@@ -127,22 +127,38 @@ def rob_milestone_bonus(total_before: int, total_after: int) -> int:
 # Kill
 # ==========================================================
 
-KILL_COOLDOWN = 3 * 3600         # 6 hours
+KILL_COOLDOWN = 3 * 3600         # 3 hours
 KILL_REWARD_RANGE = (50, 150)
-KILL_MILESTONE_STEP = 50         # every 50 kills
-KILL_MILESTONE_REWARD = 2        # withdraw_balance bonus per step
 DEATH_PROTECTION = 3 * 3600      # 3 hours — target can't be killed again while "dead"
 
 SHIELD_COST = 250
 SHIELD_DURATION = 12 * 3600      # 12 hours
 PERMANENT_SHIELD_COST = 20       # withdraw_balance ($)
 
+# Explicit milestone table — (kill_count, withdraw_balance reward)
+KILL_MILESTONES = [
+    (25, 5),
+    (50, 10),
+    (100, 25),
+    (200, 50),
+    (400, 75),
+    (800, 100),
+    (1500, 150),
+    (3000, 200),
+    (5000, 1000),
+    (10000, 3000),
+]
+
+
 def kill_reward(target_balance: int) -> int:
     amount = random.randint(*KILL_REWARD_RANGE)
     return min(amount, target_balance)
 
 
-def kill_milestone_bonus(kills: int) -> int:
-    if kills and kills % KILL_MILESTONE_STEP == 0:
-        return KILL_MILESTONE_REWARD
-    return 0
+def kill_milestone_bonus(kills_before: int, kills_after: int) -> int:
+    """Sum of all milestone rewards newly crossed between kills_before and kills_after."""
+    total = 0
+    for threshold, reward in KILL_MILESTONES:
+        if kills_before < threshold <= kills_after:
+            total += reward
+    return total
