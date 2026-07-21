@@ -114,9 +114,23 @@ You paid a fine of <code>{fine}</code> coins.
 :money: <b>Rob Successful!</b>
 
 You stole <code>{amount:,}</code> coins from <b>{target.full_name}</b>~
+
+:chart: <b>Total Robbed</b> <code>{total_after:,}</code> coins
 {bonus_text}
 """,
     )
+
+    if bonus:
+        from yuki.utils.helpers import mention_html
+        from yuki.utils import premium
+        try:
+            await premium.send(
+                context.bot,
+                sender.id,
+                f":tada: <b>Rob Milestone!</b>\n\n{mention_html(sender)}, you've robbed <code>{total_after:,}</code> coins total!\n:gift: <code>+${bonus}</code> added to your withdrawable balance~",
+            )
+        except Exception:
+            pass
 
 
 ROB = CommandHandler("rob", rob_cmd)
