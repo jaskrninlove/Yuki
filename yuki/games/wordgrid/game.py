@@ -14,6 +14,7 @@ from telegram import Update, InputFile, InputMediaPhoto, InlineKeyboardMarkup, I
 from telegram.ext import CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from telegram import InlineKeyboardMarkup
 from yuki.utils.keyboards import pbtn
+from yuki.utils.helpers import admin_only
 from yuki.database.economy import add, add_withdraw
 from yuki.utils.wordgrid_gen import generate_grid, pick_words
 from yuki.utils.wordgrid_render import render_grid_image
@@ -134,7 +135,11 @@ async def new_grid_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return await reply(msg, ":warning: Word Grid can only be played in groups~")
 
     if chat.id in _active_grids:
-        return await reply(msg, ":warning: A grid is already active here! Solve it first~")
+        return await reply(
+            msg,
+            ":warning: A grid is already active here! Solve it first, "
+            "or an admin can use /endgrid to force-clear it if it got stuck~",
+        )
 
     _load_wordgrid_pool()
     pool = list(_WORDGRID_WORDS)
@@ -286,7 +291,19 @@ async def _finish_round(ctx: ContextTypes.DEFAULT_TYPE, game: GridGame):
     await premium.send(ctx.bot, game.chat_id, "\n".join(lines), reply_markup=keyboard)
     _active_grids.pop(game.chat_id, None)
 
+@admin_only
+async def end_grid_cmd(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    msg = update.effective_message
+    chat = update.effective_chat
+
+    if chat.id not in _active_grids:
+        return await reply(msg, ":warning: There's no active grid in this group right now~")
+
+    _active_grids.pop(chat.id, None)
+    await reply(msg, ":success: Grid force-ended. Use /newgrid to start a fresh one~")
+    
 NEW_GRID = CommandHandler("newgrid", new_grid_cmd)
+END_GRID = CommandHandler("endgrid", end_grid_cmd)
 WORDGRID_GUESS_HANDLER = MessageHandler(
     filters.TEXT & ~filters.COMMAND & ~filters.UpdateType.EDITED_MESSAGE,
     wordgrid_guess_listener,
