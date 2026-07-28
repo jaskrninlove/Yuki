@@ -219,7 +219,7 @@ from yuki.modules.economy.daily import DAILY
 from yuki.modules.economy.pay import PAY
 
 from yuki.plugins.translate import TRANSLATE_CMD
-from yuki.games.wordgrid.game import NEW_GRID, WORDGRID_GUESS_HANDLER, WORDGRID_REFRESH_CB
+from yuki.games.wordgrid.game import NEW_GRID, END_GRID, WORDGRID_GUESS_HANDLER, WORDGRID_REFRESH_CB
 
 # =========================
 # Social
@@ -299,6 +299,7 @@ async def post_init(app: Application):
         BotCommand("collection",  "View your collection 📖"),
 
         BotCommand("newgrid",           "Start a Word Grid game 🧩"),
+        BotCommand("endgrid", "Force-end a stuck grid 🛑"),
         BotCommand("wordgridrankings",  "Word Grid leaderboard 🏆"),
         
         # ───────── Gifts ─────────
@@ -510,6 +511,8 @@ def build_app() -> Application:
         TRANSLATE_CMD,
         WORDGRID_RANKINGS_CMD,
         WORDGRID_RANKINGS_CB,
+        NEW_GRID,
+        END_GRID,
     # =========================
     # Social
     # =========================
