@@ -148,7 +148,12 @@ async def global_stats() -> dict:
 
     users_count = await db.users.count_documents({})
     messages_count = await db.messages.count_documents({})
-    married_count = await db.users.count_documents({"married_to": {"$ne": None}})
+
+    # FIX: marriage data lives in the separate 'married_users' collection
+    # (yuki/database/marriage.py's create_marriage()), NOT as a
+    # 'married_to' field on db.users — that field is set as a default but
+    # never actually updated, so the old query always returned 0.
+    married_count = await db.married_users.count_documents({})
 
     money_agg = await db.users.aggregate(
         [{"$group": {"_id": None, "total": {"$sum": "$balance"}}}]
