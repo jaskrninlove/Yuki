@@ -150,7 +150,8 @@ from yuki.plugins.premium_debug import emojiid_handler
 from yuki.handlers.group_events import group_event_handler
 from yuki.modules.economy.rob import ROB
 from yuki.modules.economy.kill import KILL
-from yuki.modules.economy.shield import SHIELD
+from yuki.modules.economy.shield import SHIELD, SHIELD_CB
+from yuki.handlers.shield_payments import SHIELD_PAYMENT_SCREENSHOT, SHIELD_PAYMENT_DECISION
 from yuki.modules.rankings.rankings import RANKINGS
 from yuki.modules.rankings.callbacks import RANKINGS_CALLBACK
 from yuki.modules.referral.refer import REFER
@@ -487,6 +488,10 @@ def build_app() -> Application:
         ROB,
         KILL,
         SHIELD,
+        SHIELD,
+        SHIELD_CB,              # <-- add karo
+        SHIELD_PAYMENT_SCREENSHOT,
+        SHIELD_PAYMENT_DECISION,
         CLOSE_HANDLER,
         PROPOSE,
         PROPOSE_CB,
@@ -631,6 +636,7 @@ def build_app() -> Application:
     for h in group0_handlers:
         app.add_handler(h, group=0)
 
+    
     # ── Group 1: watchers ─────────────────────────────────────────────────────
     app.add_handler(filter_watch_h,   group=1)
     app.add_handler(afk_watch_h,      group=1)
@@ -646,7 +652,7 @@ def build_app() -> Application:
     app.add_handler(voice_handler,   group=2)
     app.add_handler(NEW_GRID, group=0)
     app.add_handler(WORDGRID_REFRESH_CB, group=0)
-    app.add_handler(WORDGRID_GUESS_HANDLER, group=3) # BEFORE text_handler in the list
+    app.add_handler(WORDGRID_GUESS_HANDLER, group=3)
     # app.add_handler(WORD_ANSWER_HANDLER, group=2)
     app.add_handler(text_handler,    group=2)
     app.add_handler(XP_HANDLER, group=10)
