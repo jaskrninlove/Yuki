@@ -90,13 +90,17 @@ def crime():
 # ==========================================================
 # Rob
 # ==========================================================
+# FIX: ROB_SUCCESS was 0.45 (55% fail rate) — that's why players were
+# getting "caught" constantly. Bumped to 0.90 so roughly 1-2 out of 20
+# attempts fail, matching the intended "occasional risk" feel instead of
+# a coin-flip.
 
-ROB_SUCCESS = 0.45
+ROB_SUCCESS = 0.90
 ROB_COOLDOWN = 20 * 60           # 20 minutes
 ROB_MIN_TARGET_BALANCE = 50      # target must have at least this much
 ROB_FAIL_FINE = (20, 60)
 ROB_MILESTONE_STEP = 2_000       # every 5k total robbed
-ROB_MILESTONE_REWARD = 25        # withdraw_balance bonus per step
+ROB_MILESTONE_REWARD = 5        # withdraw_balance bonus per step
 
 
 def rob(maximum: int):
@@ -131,16 +135,23 @@ KILL_COOLDOWN = 3 * 3600         # 3 hours
 KILL_REWARD_RANGE = (50, 150)
 DEATH_PROTECTION = 3 * 3600      # 3 hours — target can't be killed again while "dead"
 
-SHIELD_COST = 250
-SHIELD_DURATION = 12 * 3600      # 12 hours
-PERMANENT_SHIELD_COST = 20       # withdraw_balance ($)
+# ==========================================================
+# Shield (now covers BOTH /kill and /rob)
+# ==========================================================
+# FIX: price/duration updated per request — 500 coins, 4 hours, protects
+# against both kill and rob. Permanent shield is now a REAL-MONEY (UPI)
+# purchase handled in payments.py, not a withdraw_balance spend — see
+# PERMANENT_SHIELD_PRICE_INR in config.py.
+
+SHIELD_COST = 500
+SHIELD_DURATION = 4 * 3600       # 4 hours
 
 # Explicit milestone table — (kill_count, withdraw_balance reward)
 KILL_MILESTONES = [
-    (25, 5),
-    (50, 10),
-    (100, 25),
-    (200, 50),
+    (25, 2),
+    (50, 5),
+    (100, 10),
+    (200, 25),
     (400, 75),
     (800, 100),
     (1500, 150),
