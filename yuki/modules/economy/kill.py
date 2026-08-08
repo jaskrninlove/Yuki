@@ -16,7 +16,6 @@ from yuki.database.economy import (
     set_pair_cooldown,
     pair_seconds_remaining,
     has_shield,
-    has_permanent_shield,
     add_kill,
     get_kills,
     add_withdraw,
@@ -68,15 +67,9 @@ Example:
     if target.is_bot:
         return await reply(message, ":warning: You can't kill a bot~")
 
-    if has_permanent_shield(sender.id) and sender.id != config.OWNER_ID:
-        return await reply(
-            message,
-            """
-:shield: <b>You Gave Up Your Blade~</b>
-
-You chose permanent protection, which means you can no longer attack others.
-""",
-        )
+    # FIX: removed the "permanent shield owners can't use /kill" restriction
+    # — a permanent shield should ONLY protect the buyer from being
+    # attacked, it should never take away their own ability to attack.
 
     if target.id == config.OWNER_ID:
         return await reply(
