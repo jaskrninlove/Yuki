@@ -17,6 +17,7 @@ from yuki.database.economy import (
     pair_seconds_remaining,
     add_total_robbed,
     add_withdraw,
+    has_shield,
 )
 
 from yuki.utils.premium import reply
@@ -28,6 +29,16 @@ from yuki.utils.rewards import (
     rob_milestone_bonus,
 )
 
+FAIL_MESSAGES = [
+    "You couldn't find the victim's wallet this time~",
+    "The target noticed you before you could steal anything.",
+    "Your plan completely fell apart at the last second.",
+    "Someone nearby got suspicious and you had to run.",
+    "You slipped up and escaped empty-handed.",
+    "The victim was more careful than you expected.",
+    "Bad luck! You walked away with nothing.",
+    "You couldn't find the perfect opportunity to strike.",
+]
 
 def _fmt(seconds: int) -> str:
     h, rem = divmod(seconds, 3600)
@@ -69,6 +80,22 @@ Example:
             f":clock: <b>Not Yet~</b>\n\nYou can rob <b>{target.full_name}</b> again in <code>{_fmt(remaining)}</code>.",
         )
 
+    set_pair_cooldown("rob", sender.id, target.id, datetime.now(timezone.utc))
+
+    # FIX: this check was completely missing before — anyone could rob a
+    # shielded target, making /shield pointless against /rob. Now it
+    # protects against both /kill and /rob, as intended.
+    if has_shield(target.id):
+        return await reply(
+            message,
+            f"""
+:shield: <b>Blocked!</b>
+
+<b>{target.full_name}</b> is protected by a shield.
+Your robbery attempt failed~
+""",
+        )
+
     target_eco = get(target.id)
     target_balance = target_eco["balance"]
 
@@ -78,20 +105,22 @@ Example:
             f":warning: {target.full_name} is too broke to rob right now~",
         )
 
-    set_pair_cooldown("rob", sender.id, target.id, datetime.now(timezone.utc))
-
     success, amount = rob(target_balance)
 
     if not success:
         fine = random.randint(*ROB_FAIL_FINE)
         remove(sender.id, fine)
+
+        if random.randint(1, 10) == 1:
+            reason = "Yuki caught you sneaking around~"
+        else:
+            reason = random.choice(FAIL_MESSAGES)
         return await reply(
             message,
             f"""
-:warning: <b>Rob Failed!</b>
+<blockquote>:warning: <b>Rob Failed!</b></blockquote>
 
-Yuki caught you sneaking around~
-You paid a fine of <code>{fine}</code> coins.
+<i>{reason} You paid a fine of <code>{fine}</code> coins.</i>
 """,
         )
 
