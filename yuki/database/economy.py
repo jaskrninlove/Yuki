@@ -14,6 +14,7 @@ from yuki.core.config import DB
 
 
 economy: Collection = DB.economy
+shield_requests: Collection = DB.shield_requests  # pending permanent-shield payments
 
 
 # ==========================================================
@@ -217,10 +218,12 @@ def pair_seconds_remaining(action: str, attacker_id: int, target_id: int, durati
 
 
 # ==========================================================
-# Shield
+# Shield (covers BOTH /kill and /rob — same flag, single source of truth)
 # ==========================================================
 
 def set_shield(user_id: int, until):
+    """Setting a new temporary shield always overwrites any previous one
+    — the timer resets, it never stacks."""
     get(user_id)
     economy.update_one(
         {"_id": user_id},
@@ -263,15 +266,37 @@ def shield_remaining(user_id: int) -> Optional[int]:
 # ==========================================================
 
 def set_permanent_shield(user_id: int, value: bool = True):
+    """Activating a permanent shield also clears any leftover temporary
+    shield_until — permanent supersedes it entirely."""
     get(user_id)
     economy.update_one(
         {"_id": user_id},
-        {"$set": {"permanent_shield": value}},
+        {"$set": {"permanent_shield": value, "shield_until": None}},
     )
 
 
 def has_permanent_shield(user_id: int) -> bool:
     return get(user_id).get("permanent_shield", False)
+
+
+# ==========================================================
+# Permanent Shield — pending REAL-MONEY (UPI) payment requests
+# ==========================================================
+
+def set_pending_shield_payment(user_id: int, name: str, username: Optional[str]):
+    shield_requests.update_one(
+        {"_id": user_id},
+        {"$set": {"name": name, "username": username, "requested_at": datetime.now(timezone.utc)}},
+        upsert=True,
+    )
+
+
+def get_pending_shield_payment(user_id: int):
+    return shield_requests.find_one({"_id": user_id})
+
+
+def clear_pending_shield_payment(user_id: int):
+    shield_requests.delete_one({"_id": user_id})
 
 
 # ==========================================================
@@ -336,7 +361,7 @@ def dead_remaining(user_id: int):
 
     remaining = (until - datetime.now(timezone.utc)).total_seconds()
     return int(remaining) if remaining > 0 else None
-    
+
 # ==========================================================
 # Daily
 # ==========================================================
