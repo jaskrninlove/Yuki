@@ -51,6 +51,11 @@ RANKING_IMAGE: str = os.environ.get(
     "https://i.pinimg.com/736x/db/03/db/db03db52c309fdca55792ea7cdec416d.jpg"
 )
 
+# ── Payments — permanent shield (add this to config.py) ──────────────────────
+UPI_ID: str = os.environ.get("UPI_ID", "jaskaran0@yesfam")
+UPI_QR_IMAGE: str = os.environ.get("UPI_QR_IMAGE", "assets/qr.jpg")  # local path (e.g. assets/qr.jpg) or URL
+PERMANENT_SHIELD_PRICE_INR: int = int(os.environ.get("PERMANENT_SHIELD_PRICE_INR", "100"))
+
 # ── AI Chat (OpenAI / any compatible API) ────────────────────────────────────
 AI_API_KEY: str = os.environ.get("AI_API_KEY", "")
 AI_BASE_URL: str = os.environ.get("AI_BASE_URL", "https://api.groq.com/openai/v1")
