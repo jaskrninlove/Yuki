@@ -4,23 +4,25 @@ Copyright © Jass
 """
 
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
-from telegram import Update
-from telegram.ext import CommandHandler, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import CallbackQueryHandler, CommandHandler, ContextTypes
 
+from yuki.core import config
 from yuki.database.economy import (
     get,
     remove,
-    remove_withdraw,
     set_shield,
     has_shield,
     has_permanent_shield,
-    set_permanent_shield,
     shield_remaining,
+    set_pending_shield_payment,
 )
 
+from yuki.utils import premium
 from yuki.utils.premium import reply
-from yuki.utils.rewards import SHIELD_COST, SHIELD_DURATION, PERMANENT_SHIELD_COST
+from yuki.utils.rewards import SHIELD_COST, SHIELD_DURATION
 
 
 def _fmt(seconds: int) -> str:
@@ -31,7 +33,16 @@ def _fmt(seconds: int) -> str:
     return f"{m}m"
 
 
+def _shop_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton(f"4-Hour Shield — {SHIELD_COST} coins", callback_data="yshield_temp")],
+        [InlineKeyboardButton(f"Permanent Shield — ₹{config.PERMANENT_SHIELD_PRICE_INR}", callback_data="yshield_perm")],
+    ])
+
+
 async def shield_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/shield — opens Yuki's Protection Shop with two buttons, same
+    layout style as Kai's shop."""
     message = update.effective_message
     user = update.effective_user
 
@@ -45,38 +56,6 @@ No one can ever touch you~ 🌸
 """,
         )
 
-    # /shield permanent
-    if context.args and context.args[0].lower() == "permanent":
-        eco = get(user.id)
-
-        if eco["withdraw_balance"] < PERMANENT_SHIELD_COST:
-            return await reply(
-                message,
-                f"""
-:warning: <b>Not Enough Withdrawable Balance</b>
-
-A permanent shield costs <code>${PERMANENT_SHIELD_COST}</code> from your withdrawable balance.
-Your withdrawable balance: <code>${eco['withdraw_balance']:,}</code>
-""",
-            )
-
-        remove_withdraw(user.id, PERMANENT_SHIELD_COST)
-        set_permanent_shield(user.id, True)
-
-        return await reply(
-            message,
-            f"""
-:shield: <b>Permanent Shield Activated!</b>
-
-You are now protected from <code>/kill</code> forever~
-
-:warning: <i>In exchange, you can no longer use <code>/kill</code> on others.</i>
-
-:gold: <code>-${PERMANENT_SHIELD_COST}</code> withdrawable balance spent
-""",
-        )
-
-    # normal /shield
     if has_shield(user.id):
         remaining = shield_remaining(user.id)
         if remaining:
@@ -89,38 +68,81 @@ Your shield is still active for <code>{_fmt(remaining)}</code>.
 """,
             )
 
-    eco = get(user.id)
+    text = f"""
+:shield: <b>Yuki's Protection Shop</b>
 
-    if eco["balance"] < SHIELD_COST:
-        return await reply(
-            message,
+Pick how you'd like to stay protected from kills & robs~ 🌸
+
+:dot2: <b>4-Hour Shield</b> — {SHIELD_COST} coins (from your wallet)
+:dot2: <b>Permanent Shield</b> — ₹{config.PERMANENT_SHIELD_PRICE_INR} (real payment, one-time, forever)
+"""
+    await reply(message, text, reply_markup=_shop_keyboard())
+
+
+async def shield_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handles the two shop buttons: yshield_temp / yshield_perm."""
+    query = update.callback_query
+    await query.answer()
+    user = query.from_user
+
+    if has_permanent_shield(user.id):
+        return await premium.edit(query, ":shield: You already have a permanent shield — you're covered forever~ 🌸")
+
+    if query.data == "yshield_temp":
+        if has_shield(user.id):
+            remaining = shield_remaining(user.id)
+            if remaining:
+                return await premium.edit(query, f":shield: You're already protected for <code>{_fmt(remaining)}</code> more.")
+
+        eco = get(user.id)
+        if eco["balance"] < SHIELD_COST:
+            return await premium.edit(
+                query,
+                f":warning: You need <code>{SHIELD_COST}</code> coins for a shield. You have <code>{eco['balance']:,}</code>.",
+            )
+
+        remove(user.id, SHIELD_COST)
+        until = datetime.now(timezone.utc) + timedelta(seconds=SHIELD_DURATION)
+        set_shield(user.id, until)
+
+        await premium.edit(
+            query,
             f"""
-:warning: <b>Not Enough Coins</b>
-
-A shield costs <code>{SHIELD_COST}</code> coins.
-Your balance: <code>{eco['balance']:,}</code>
-
-<i>Tip: Use <code>/shield permanent</code> for permanent protection (costs withdrawable balance, but you give up your own <code>/kill</code> ability).</i>
-""",
-        )
-
-    remove(user.id, SHIELD_COST)
-
-    until = datetime.now(timezone.utc) + timedelta(seconds=SHIELD_DURATION)
-    set_shield(user.id, until)
-
-    await reply(
-        message,
-        f"""
 :shield: <b>Shield Activated!</b>
 
-You're protected from kills for <code>{_fmt(SHIELD_DURATION)}</code>~
+You're protected from both <code>/kill</code> and <code>/rob</code> for <code>{_fmt(SHIELD_DURATION)}</code>~
 
 :gold: <code>-{SHIELD_COST}</code> coins spent
-
-<i>Tip: Use <code>/shield permanent</code> for permanent protection.</i>
 """,
-    )
+        )
+        return
+
+    if query.data == "yshield_perm":
+        set_pending_shield_payment(user.id, user.first_name or "friend", user.username)
+
+        text = f"""
+:shield: <b>Permanent Shield — ₹{config.PERMANENT_SHIELD_PRICE_INR}</b>
+
+Pay <code>₹{config.PERMANENT_SHIELD_PRICE_INR}</code> to:
+:dot2: UPI ID: <code>{config.UPI_ID or 'not set — ask the owner'}</code>
+
+Once paid, send a screenshot of the payment right here 📸 — Yuki will pass it
+straight to the owner for a quick check~
+"""
+        if config.UPI_QR_IMAGE:
+            qr_path = Path(config.UPI_QR_IMAGE)
+            try:
+                if qr_path.is_file():
+                    with open(qr_path, "rb") as qr_file:
+                        await query.message.reply_photo(photo=qr_file, caption=text, parse_mode="HTML")
+                else:
+                    await query.message.reply_photo(photo=config.UPI_QR_IMAGE, caption=text, parse_mode="HTML")
+                return
+            except Exception:
+                pass
+
+        await query.message.reply_text(text, parse_mode="HTML")
 
 
 SHIELD = CommandHandler("shield", shield_cmd)
+SHIELD_CB = CallbackQueryHandler(shield_callback, pattern=r"^yshield_")
