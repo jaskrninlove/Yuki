@@ -121,10 +121,10 @@ You're protected from both <code>/kill</code> and <code>/rob</code> for <code>{_
         set_pending_shield_payment(user.id, user.first_name or "friend", user.username)
 
         text = f"""
-:shield: <b>Permanent Shield — ₹{config.PERMANENT_SHIELD_PRICE_INR}</b>
+🛡️ <b>Permanent Shield — ₹{config.PERMANENT_SHIELD_PRICE_INR}</b>
 
 Pay <code>₹{config.PERMANENT_SHIELD_PRICE_INR}</code> to:
-:dot2: UPI ID: <code>{config.UPI_ID or 'not set — ask the owner'}</code>
+🕸️ UPI ID: <code>{config.UPI_ID or 'not set — ask the owner'}</code>
 
 Once paid, send a screenshot of the payment right here 📸 — Yuki will pass it
 straight to the owner for a quick check~
