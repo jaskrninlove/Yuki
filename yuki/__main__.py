@@ -152,6 +152,7 @@ from yuki.modules.economy.rob import ROB
 from yuki.modules.economy.kill import KILL
 from yuki.modules.economy.shield import SHIELD, SHIELD_CB
 from yuki.handlers.shield_payments import SHIELD_PAYMENT_SCREENSHOT, SHIELD_PAYMENT_DECISION
+from yuki.modules.economy.coupon import CREATECOUPON, REDEEM
 from yuki.modules.rankings.rankings import RANKINGS
 from yuki.modules.rankings.callbacks import RANKINGS_CALLBACK
 from yuki.modules.referral.refer import REFER
@@ -518,6 +519,8 @@ def build_app() -> Application:
         WORDGRID_RANKINGS_CB,
         NEW_GRID,
         END_GRID,
+        CREATECOUPON,
+        REDEEM,
     # =========================
     # Social
     # =========================
